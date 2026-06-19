@@ -213,14 +213,7 @@ function renderStaff() {
         </aside>
 
         <section class="staff-main">
-          <div class="staff-control-row">
-            <div class="step-band">
-              <span class="step-team" id="selected-team-label">NO TEAM</span>
-              <span class="step-value" id="selected-step-label">STEP -- / ${formatNumber(STEP_COUNT)}</span>
-            </div>
-            <button class="step-button" id="step-forward" type="button" disabled>進める</button>
-            <button class="step-button" id="step-back" type="button" disabled>戻す</button>
-          </div>
+          <div class="active-team-controls" id="active-team-controls"></div>
         </section>
       </div>
     </section>
@@ -230,9 +223,8 @@ function renderStaff() {
 
   const state = {
     activeTeams: [],
-    selectedTeam: null,
     steps: new Map(),
-    commandPending: false,
+    pendingTeams: new Set(),
   };
 
   const unsubscribePresence = onValue(
@@ -245,9 +237,6 @@ function renderStaff() {
         .filter((team) => Number.isInteger(team) && team >= 1 && team <= TEAM_COUNT)
         .sort((a, b) => a - b);
 
-      if (!state.activeTeams.includes(state.selectedTeam)) {
-        state.selectedTeam = state.activeTeams[0] ?? null;
-      }
       updateStaffView(state);
     },
     (error) => showToast(`プレイヤー接続一覧を取得できません: ${error.message}`),
@@ -271,9 +260,6 @@ function renderStaff() {
     (error) => showToast(`FirestoreのSTEP監視に失敗しました: ${error.message}`),
   );
 
-  stage.querySelector("#step-forward").addEventListener("click", () => changeStep(state, 1));
-  stage.querySelector("#step-back").addEventListener("click", () => changeStep(state, -1));
-
   viewCleanups.push(unsubscribePresence, unsubscribeTeams);
   updateStaffView(state);
 }
@@ -285,54 +271,65 @@ function updateStaffView(state) {
   list.innerHTML = Array.from({ length: TEAM_COUNT }, (_, index) => {
     const team = index + 1;
     const isOnline = state.activeTeams.includes(team);
-    const isSelected = team === state.selectedTeam;
 
     return `
-      <button
-        class="staff-team-button ${isOnline ? "is-online" : ""} ${isSelected ? "is-selected" : ""}"
-        type="button"
-        data-staff-team="${team}"
+      <div
+        class="staff-team-button ${isOnline ? "is-online" : ""}"
         aria-label="チーム${team}${isOnline ? "（接続中）" : "（未接続）"}"
-        ${isOnline ? "" : "disabled"}
       >
         ${team}
-      </button>
+      </div>
     `;
   }).join("");
 
-  list.querySelectorAll("[data-staff-team]").forEach((button) => {
+  const controls = stage.querySelector("#active-team-controls");
+  if (!controls) return;
+
+  controls.innerHTML = Array.from({ length: TEAM_COUNT }, (_, index) => {
+      const team = index + 1;
+      const isOnline = state.activeTeams.includes(team);
+      const step = state.steps.get(team) ?? 1;
+      const isPending = state.pendingTeams.has(team);
+
+      return `
+        <div class="team-control-row ${isOnline ? "is-online" : "is-offline"}">
+          <div class="step-band ${isOnline ? "" : "is-disconnected"}">
+            <span class="step-team">TEAM ${formatNumber(team)}</span>
+            <span class="step-value">
+              ${isOnline ? `STEP ${formatNumber(step)} / ${formatNumber(STEP_COUNT)}` : "接続無し"}
+            </span>
+          </div>
+          <button
+            class="step-button ${isPending ? "loading" : ""}"
+            type="button"
+            data-step-team="${team}"
+            data-step-delta="1"
+            ${!isOnline || isPending || step >= STEP_COUNT ? "disabled" : ""}
+          >進める</button>
+          <button
+            class="step-button ${isPending ? "loading" : ""}"
+            type="button"
+            data-step-team="${team}"
+            data-step-delta="-1"
+            ${!isOnline || isPending || step <= 1 ? "disabled" : ""}
+          >戻す</button>
+        </div>
+      `;
+    })
+    .join("");
+
+  controls.querySelectorAll("[data-step-team]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.selectedTeam = Number(button.dataset.staffTeam);
-      updateStaffView(state);
+      changeStep(state, Number(button.dataset.stepTeam), Number(button.dataset.stepDelta));
     });
   });
-
-  const selectedTeamLabel = stage.querySelector("#selected-team-label");
-  const selectedStepLabel = stage.querySelector("#selected-step-label");
-  const forwardButton = stage.querySelector("#step-forward");
-  const backButton = stage.querySelector("#step-back");
-  const selectedStep = state.selectedTeam ? state.steps.get(state.selectedTeam) ?? 1 : null;
-
-  selectedTeamLabel.textContent = state.selectedTeam
-    ? `TEAM ${formatNumber(state.selectedTeam)}`
-    : "NO TEAM";
-  selectedStepLabel.textContent = selectedStep
-    ? `STEP ${formatNumber(selectedStep)} / ${formatNumber(STEP_COUNT)}`
-    : `STEP -- / ${formatNumber(STEP_COUNT)}`;
-
-  forwardButton.disabled =
-    state.commandPending || !state.selectedTeam || selectedStep >= STEP_COUNT;
-  backButton.disabled = state.commandPending || !state.selectedTeam || selectedStep <= 1;
-  forwardButton.classList.toggle("loading", state.commandPending);
-  backButton.classList.toggle("loading", state.commandPending);
 }
 
-async function changeStep(state, delta) {
-  if (!state.selectedTeam || state.commandPending) return;
+async function changeStep(state, team, delta) {
+  if (!state.activeTeams.includes(team) || state.pendingTeams.has(team)) return;
 
-  const team = state.selectedTeam;
   const teamDocument = doc(firestore, "teams", teamDocumentId(team));
-  state.commandPending = true;
+  state.pendingTeams.add(team);
   updateStaffView(state);
 
   try {
@@ -353,9 +350,9 @@ async function changeStep(state, delta) {
       );
     });
   } catch (error) {
-    showToast(`STEPを更新できません: ${error.message}`);
+    showToast(`チーム${team}のSTEPを更新できません: ${error.message}`);
   } finally {
-    state.commandPending = false;
+    state.pendingTeams.delete(team);
     updateStaffView(state);
   }
 }
