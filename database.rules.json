@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "control": {
+      "presence": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}

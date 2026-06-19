@@ -1,0 +1,17 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /teams/{teamId} {
+      allow read: if true;
+
+      allow create, update: if
+        request.resource.data.teamNumber is int &&
+        request.resource.data.teamNumber >= 1 &&
+        request.resource.data.teamNumber <= 10 &&
+        request.resource.data.step is int &&
+        request.resource.data.step >= 1 &&
+        request.resource.data.step <= 10;
+    }
+  }
+}
