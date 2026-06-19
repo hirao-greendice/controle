@@ -358,13 +358,25 @@ async function changeStep(state, team, delta) {
 }
 
 function renderPlayer(team) {
+  const cameraButtons = Array.from({ length: 8 }, (_, index) => {
+    const buttonNumber = index + 1;
+    return `
+      <button
+        class="player-camera-button ${buttonNumber === 1 ? "is-active" : ""}"
+        type="button"
+        data-camera-button="${buttonNumber}"
+        aria-label="上部ボタン${buttonNumber}"
+        aria-pressed="${buttonNumber === 1 ? "true" : "false"}"
+      ></button>
+    `;
+  }).join("");
+
   stage.innerHTML = `
     <section class="screen player-screen">
-      <div class="player-connection">${connectionBadgeMarkup()}</div>
-      <div class="player-step-badge">
-        <span>TEAM ${formatNumber(team)} / FIRESTORE SYNC</span>
-        <strong id="player-step">STEP --</strong>
+      <div class="player-camera-controls" aria-label="カメラ操作">
+        ${cameraButtons}
       </div>
+      <div class="player-step-number" id="player-step" aria-label="現在のSTEP">--</div>
       <button
         class="hidden-staff-trigger"
         id="hidden-staff-trigger"
@@ -374,6 +386,7 @@ function renderPlayer(team) {
     </section>
   `;
 
+  setupPlayerCameraControls();
   setupHiddenStaffMenu();
 
   const teamDocument = doc(firestore, "teams", teamDocumentId(team));
@@ -395,12 +408,29 @@ function renderPlayer(team) {
     (snapshot) => {
       const step = snapshot.exists() ? normalizeStep(snapshot.data().step) : 1;
       const label = stage.querySelector("#player-step");
-      if (label) label.textContent = `STEP ${formatNumber(step)} / ${formatNumber(STEP_COUNT)}`;
+      if (label) {
+        label.textContent = String(step);
+        label.setAttribute("aria-label", `現在のSTEP ${step}`);
+      }
     },
     (error) => showToast(`STEPを受信できません: ${error.message}`),
   );
 
   viewCleanups.push(unsubscribe);
+}
+
+function setupPlayerCameraControls() {
+  const buttons = [...stage.querySelectorAll("[data-camera-button]")];
+
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      buttons.forEach((target) => {
+        const isActive = target === button;
+        target.classList.toggle("is-active", isActive);
+        target.setAttribute("aria-pressed", String(isActive));
+      });
+    });
+  });
 }
 
 function setupHiddenStaffMenu() {
