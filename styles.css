@@ -513,10 +513,69 @@ button {
   visibility: visible;
 }
 
+.player-step-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: block;
+  width: 1921px;
+  height: 151px;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.player-log-viewport {
+  position: absolute;
+  top: 262px;
+  left: 1490px;
+  z-index: 1;
+  width: 401px;
+  height: 829px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-color: #bd2028 rgba(189, 32, 40, 0.12);
+  scrollbar-width: thin;
+}
+
+.player-log-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.player-log-viewport::-webkit-scrollbar-track {
+  background: rgba(189, 32, 40, 0.08);
+}
+
+.player-log-viewport::-webkit-scrollbar-thumb {
+  background: #bd2028;
+}
+
+.player-log-list {
+  display: flex;
+  flex-direction: column;
+  width: 401px;
+  min-height: 100%;
+}
+
+.player-log-entry {
+  display: block;
+  flex: 0 0 121px;
+  width: 401px;
+  height: 121px;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 .player-camera-layers {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 5;
   pointer-events: none;
 }
 
@@ -533,7 +592,7 @@ button {
   position: absolute;
   top: 181px;
   left: 80px;
-  z-index: 4;
+  z-index: 6;
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   width: 1380px;
@@ -562,8 +621,8 @@ button {
 .hidden-staff-trigger {
   position: absolute;
   top: 0;
-  right: 0;
-  z-index: 5;
+  left: 0;
+  z-index: 7;
   width: 360px;
   height: 190px;
   padding: 0;
@@ -575,6 +634,159 @@ button {
 
 .hidden-staff-trigger:focus {
   outline: none;
+}
+
+.player-map-trigger {
+  position: absolute;
+  top: 34px;
+  left: 1663px;
+  z-index: 7;
+  width: 216px;
+  height: 83px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.player-map-trigger:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: -4px;
+}
+
+.player-map-popup {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background: #fff;
+}
+
+.player-map-popup[hidden] {
+  display: none;
+}
+
+.player-map-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 1921px;
+  height: 1201px;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.player-map-window {
+  z-index: 0;
+}
+
+.player-map-base {
+  z-index: 1;
+}
+
+.player-map-camera-layers {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.player-map-camera-layer {
+  z-index: 0;
+}
+
+.player-map-room-button,
+.player-map-close-button {
+  position: absolute;
+  z-index: 3;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.player-map-room-a {
+  top: 160px;
+  left: 230px;
+  width: 675px;
+  height: 101px;
+}
+
+.player-map-room-b {
+  top: 160px;
+  left: 905px;
+  width: 676px;
+  height: 101px;
+}
+
+.player-map-close-button {
+  top: 160px;
+  left: 1581px;
+  width: 90px;
+  height: 101px;
+}
+
+.player-map-room-button:focus-visible,
+.player-map-close-button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: -4px;
+}
+
+.player-step-popup {
+  position: absolute;
+  inset: 0;
+  z-index: 28;
+}
+
+.player-step-popup[hidden] {
+  display: none;
+}
+
+.player-step-popup-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 1921px;
+  height: 1201px;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.player-step-popup-content {
+  z-index: 1;
+}
+
+.player-step-popup-window {
+  z-index: 0;
+}
+
+.player-step-popup-close {
+  position: absolute;
+  top: 160px;
+  left: 1581px;
+  z-index: 2;
+  width: 100px;
+  height: 101px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.player-step-popup-close:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: -4px;
 }
 
 .toast {

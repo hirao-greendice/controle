@@ -53,6 +53,47 @@ const CAMERA_FRAME_STEPS = Object.freeze({
   8: ["5-1", "6-1"],
   9: ["5-1", "6-1"],
 });
+const CAMERA_UNLOCK_STEP_LABELS = Object.freeze({
+  1: "1-1",
+  2: "1-1",
+  3: "1-1",
+  4: "2-1",
+  5: "3-1",
+  6: "3-1",
+  7: "4-1",
+  8: "5-1",
+  9: "5-1",
+});
+const MAP_CAMERA_LAYERS = Object.freeze({
+  A: [
+    { step: "1-1", asset: "Map_Camera_A_1-1.png" },
+    { step: "5-1", asset: "Map_Camera_A_5-1.png" },
+  ],
+  B: [
+    { step: "1-1", asset: "Map_Camera_B_1-1.png" },
+    { step: "2-1", asset: "Map_Camera_B_2-1.png" },
+    { step: "3-1", asset: "Map_Camera_B_3-1.png" },
+    { step: "4-1", asset: "Map_Camera_B_4-1.png" },
+  ],
+});
+const STEP_POPUPS = Object.freeze({
+  "2-1": "Pop_2-1.png",
+  "3-1": "Pop_3-1.png",
+  "4-1": "Pop_4-1.png",
+  "5-1": "Pop_5-1.png",
+  "6-1": "Pop_6-1.png",
+});
+const STEP_LOGS = Object.freeze({
+  "1-1": ["Log_01.png", "Log_02.png"],
+  "2-1": ["Log_03.png", "Log_04.png"],
+  "2-2": ["Log_05.png", "Log_06.png"],
+  "3-1": ["Log_07.png", "Log_08.png"],
+  "3-2": ["Log_09.png", "Log_10.png"],
+  "4-1": ["Log_11.png", "Log_12.png"],
+  "4-2": ["Log_13.png", "Log_14.png"],
+  "5-1": ["Log_15.png", "Log_16.png"],
+  "6-1": ["Log_17.png", "Log_18.png"],
+});
 const PRESENCE_ROOT = "control/presence";
 
 const app = initializeApp(firebaseConfig);
@@ -423,6 +464,10 @@ function renderPlayer(team) {
         <img class="player-camera-feed-layer" data-camera-feed-frame alt="" />
       </div>
       <img class="player-base-layer player-base-layer-02" src="./Base_02.png" alt="" />
+      <img class="player-step-layer" data-player-step-layer alt="" />
+      <div class="player-log-viewport" data-player-log-viewport aria-label="ロボットの行動ログ">
+        <div class="player-log-list" data-player-log-list></div>
+      </div>
       <div class="player-camera-layers" aria-hidden="true">
         ${cameraLayers}
       </div>
@@ -430,11 +475,30 @@ function renderPlayer(team) {
         ${cameraButtons}
       </div>
       <button
+        class="player-map-trigger"
+        id="player-map-trigger"
+        type="button"
+        aria-label="MAPを開く"
+      ></button>
+      <button
         class="hidden-staff-trigger"
         id="hidden-staff-trigger"
         type="button"
         aria-label="スタッフメニュー"
       ></button>
+      <div class="player-map-popup" id="player-map-popup" role="dialog" aria-modal="true" aria-label="MAP" hidden>
+        <img class="player-map-layer player-map-window" src="./Map_Window.png" alt="" />
+        <img class="player-map-layer player-map-base" data-map-base alt="" />
+        <div class="player-map-camera-layers" data-map-camera-layers aria-hidden="true"></div>
+        <button class="player-map-room-button player-map-room-a" type="button" data-map-room="A" aria-label="ルームα"></button>
+        <button class="player-map-room-button player-map-room-b" type="button" data-map-room="B" aria-label="ルームβ"></button>
+        <button class="player-map-close-button" type="button" data-map-close aria-label="MAPを閉じる"></button>
+      </div>
+      <div class="player-step-popup" id="player-step-popup" role="dialog" aria-modal="true" aria-label="STEPメッセージ" hidden>
+        <img class="player-step-popup-layer player-step-popup-content" data-step-popup-content alt="" />
+        <img class="player-step-popup-layer player-step-popup-window" src="./Pop_window.png" alt="" />
+        <button class="player-step-popup-close" type="button" data-step-popup-close aria-label="メッセージを閉じる"></button>
+      </div>
     </section>
   `;
 
@@ -473,8 +537,22 @@ function setupPlayerCameraControls() {
   const activeLayers = [...stage.querySelectorAll("[data-camera-active-layer]")];
   const feedBase = stage.querySelector("[data-camera-feed-base]");
   const feedFrame = stage.querySelector("[data-camera-feed-frame]");
+  const stepLayer = stage.querySelector("[data-player-step-layer]");
+  const logViewport = stage.querySelector("[data-player-log-viewport]");
+  const logList = stage.querySelector("[data-player-log-list]");
+  const mapTrigger = stage.querySelector("#player-map-trigger");
+  const mapPopup = stage.querySelector("#player-map-popup");
+  const mapBase = stage.querySelector("[data-map-base]");
+  const mapCameraLayers = stage.querySelector("[data-map-camera-layers]");
+  const mapRoomButtons = [...stage.querySelectorAll("[data-map-room]")];
+  const mapCloseButton = stage.querySelector("[data-map-close]");
+  const stepPopup = stage.querySelector("#player-step-popup");
+  const stepPopupContent = stage.querySelector("[data-step-popup-content]");
+  const stepPopupClose = stage.querySelector("[data-step-popup-close]");
   let currentStep = 1;
   let selectedCamera = 1;
+  let selectedMapRoom = "A";
+  let renderedLogStep = null;
 
   buttons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -486,14 +564,40 @@ function setupPlayerCameraControls() {
     });
   });
 
+  mapTrigger.addEventListener("click", () => {
+    mapPopup.hidden = false;
+    renderMap();
+  });
+
+  mapRoomButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedMapRoom = button.dataset.mapRoom;
+      renderMap();
+    });
+  });
+
+  mapCloseButton.addEventListener("click", () => {
+    mapPopup.hidden = true;
+  });
+
+  stepPopupClose.addEventListener("click", () => {
+    stepPopup.hidden = true;
+  });
+
   function updateStep(step) {
-    currentStep = normalizeStep(step);
+    const nextStep = normalizeStep(step);
+    const didStepChange = nextStep !== currentStep;
+    currentStep = nextStep;
 
     if (!isCameraUnlocked(selectedCamera, currentStep)) {
       selectedCamera = getUnlockedCameras(currentStep).at(-1) ?? 1;
     }
 
     render();
+
+    if (didStepChange) {
+      showStepPopup();
+    }
   }
 
   function render() {
@@ -525,6 +629,9 @@ function setupPlayerCameraControls() {
     });
 
     renderCameraFeed();
+    renderStepDisplay();
+    renderLogs();
+    renderMap();
   }
 
   function renderCameraFeed() {
@@ -541,6 +648,64 @@ function setupPlayerCameraControls() {
       feedFrame.src =
         `./Cam_${formatNumber(selectedCamera)}_${frameStep}.png`;
     }
+  }
+
+  function renderStepDisplay() {
+    stepLayer.src = `./Stage_${getStepLabel(currentStep)}.png`;
+  }
+
+  function renderLogs() {
+    if (renderedLogStep === currentStep) return;
+
+    const visibleLogs = STEP_LABELS.slice(0, currentStep).flatMap(
+      (stepLabel) => STEP_LOGS[stepLabel] ?? [],
+    );
+
+    logList.innerHTML = visibleLogs
+      .map(
+        (logAsset, index) => `
+          <img
+            class="player-log-entry"
+            src="./${logAsset}"
+            alt="行動ログ ${index + 1}"
+          />
+        `,
+      )
+      .join("");
+
+    renderedLogStep = currentStep;
+    logViewport.scrollTop = logViewport.scrollHeight;
+  }
+
+  function renderMap() {
+    mapBase.src = `./Map_base_${selectedMapRoom}.png`;
+
+    mapRoomButtons.forEach((button) => {
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.mapRoom === selectedMapRoom),
+      );
+    });
+
+    mapCameraLayers.innerHTML = (MAP_CAMERA_LAYERS[selectedMapRoom] ?? [])
+      .filter(({ step }) => getStepIndex(step) <= currentStep)
+      .map(
+        ({ asset }) => `
+          <img class="player-map-layer player-map-camera-layer" src="./${asset}" alt="" />
+        `,
+      )
+      .join("");
+  }
+
+  function showStepPopup() {
+    const popupAsset = STEP_POPUPS[getStepLabel(currentStep)];
+    if (!popupAsset) {
+      stepPopup.hidden = true;
+      return;
+    }
+
+    stepPopupContent.src = `./${popupAsset}`;
+    stepPopup.hidden = false;
   }
 
   updateStep(1);
@@ -621,8 +786,8 @@ function getCameraFrameStep(cameraNumber, step) {
 }
 
 function getCameraUnlockStep(cameraNumber) {
-  const firstFrameStep = CAMERA_FRAME_STEPS[cameraNumber]?.[0];
-  return firstFrameStep ? STEP_LABELS.indexOf(firstFrameStep) + 1 : STEP_COUNT + 1;
+  const unlockStepLabel = CAMERA_UNLOCK_STEP_LABELS[cameraNumber];
+  return unlockStepLabel ? getStepIndex(unlockStepLabel) : STEP_COUNT + 1;
 }
 
 function isCameraUnlocked(cameraNumber, step) {
@@ -633,6 +798,10 @@ function getUnlockedCameras(step) {
   return Array.from({ length: CAMERA_COUNT }, (_, index) => index + 1).filter(
     (cameraNumber) => isCameraUnlocked(cameraNumber, step),
   );
+}
+
+function getStepIndex(stepLabel) {
+  return STEP_LABELS.indexOf(stepLabel) + 1;
 }
 
 function formatNumber(value) {
