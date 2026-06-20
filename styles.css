@@ -472,7 +472,8 @@ button {
 }
 
 .player-base-layer,
-.player-camera-layer {
+.player-camera-layer,
+.player-camera-feed-layer {
   position: absolute;
   top: 0;
   left: 0;
@@ -493,13 +494,29 @@ button {
 }
 
 .player-base-layer-02 {
+  z-index: 2;
+}
+
+.player-camera-feed {
+  position: absolute;
+  inset: 0;
   z-index: 1;
+  pointer-events: none;
+}
+
+.player-camera-feed-layer {
+  height: 1201px;
+  visibility: hidden;
+}
+
+.player-camera-feed-layer.is-visible {
+  visibility: visible;
 }
 
 .player-camera-layers {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
 }
 
@@ -516,7 +533,7 @@ button {
   position: absolute;
   top: 181px;
   left: 80px;
-  z-index: 3;
+  z-index: 4;
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   width: 1380px;
@@ -546,7 +563,7 @@ button {
   position: absolute;
   top: 0;
   right: 0;
-  z-index: 4;
+  z-index: 5;
   width: 360px;
   height: 190px;
   padding: 0;

@@ -29,8 +29,30 @@ const firebaseConfig = {
 };
 
 const TEAM_COUNT = 10;
-const STEP_COUNT = 10;
+const STEP_LABELS = Object.freeze([
+  "1-1",
+  "2-1",
+  "2-2",
+  "3-1",
+  "3-2",
+  "4-1",
+  "4-2",
+  "5-1",
+  "6-1",
+]);
+const STEP_COUNT = STEP_LABELS.length;
 const CAMERA_COUNT = 9;
+const CAMERA_FRAME_STEPS = Object.freeze({
+  1: STEP_LABELS,
+  2: ["1-1", "5-1"],
+  3: ["1-1", "5-1", "6-1"],
+  4: ["2-1", "3-1"],
+  5: ["3-1", "5-1"],
+  6: ["3-1", "5-1"],
+  7: ["4-1", "5-1"],
+  8: ["5-1", "6-1"],
+  9: ["5-1", "6-1"],
+});
 const PRESENCE_ROOT = "control/presence";
 
 const app = initializeApp(firebaseConfig);
@@ -298,7 +320,7 @@ function updateStaffView(state) {
           <div class="step-band ${isOnline ? "" : "is-disconnected"}">
             <span class="step-team">TEAM ${formatNumber(team)}</span>
             <span class="step-value">
-              ${isOnline ? `STEP ${formatNumber(step)} / ${formatNumber(STEP_COUNT)}` : "接続無し"}
+              ${isOnline ? `STEP ${getStepLabel(step)} / ${STEP_LABELS.at(-1)}` : "接続無し"}
             </span>
           </div>
           <button
@@ -396,6 +418,10 @@ function renderPlayer(team) {
   stage.innerHTML = `
     <section class="screen player-screen">
       <img class="player-base-layer player-base-layer-01" src="./Base_01.png" alt="" />
+      <div class="player-camera-feed" aria-hidden="true">
+        <img class="player-camera-feed-layer" data-camera-feed-base alt="" />
+        <img class="player-camera-feed-layer" data-camera-feed-frame alt="" />
+      </div>
       <img class="player-base-layer player-base-layer-02" src="./Base_02.png" alt="" />
       <div class="player-camera-layers" aria-hidden="true">
         ${cameraLayers}
@@ -445,13 +471,15 @@ function setupPlayerCameraControls() {
   const buttons = [...stage.querySelectorAll("[data-camera-button]")];
   const lockedLayers = [...stage.querySelectorAll("[data-camera-locked-layer]")];
   const activeLayers = [...stage.querySelectorAll("[data-camera-active-layer]")];
+  const feedBase = stage.querySelector("[data-camera-feed-base]");
+  const feedFrame = stage.querySelector("[data-camera-feed-frame]");
   let currentStep = 1;
   let selectedCamera = 1;
 
   buttons.forEach((button) => {
     button.addEventListener("click", () => {
       const cameraNumber = Number(button.dataset.cameraButton);
-      if (cameraNumber > currentStep) return;
+      if (!isCameraUnlocked(cameraNumber, currentStep)) return;
 
       selectedCamera = cameraNumber;
       render();
@@ -459,10 +487,10 @@ function setupPlayerCameraControls() {
   });
 
   function updateStep(step) {
-    currentStep = Math.min(CAMERA_COUNT, normalizeStep(step));
+    currentStep = normalizeStep(step);
 
-    if (selectedCamera > currentStep) {
-      selectedCamera = currentStep;
+    if (!isCameraUnlocked(selectedCamera, currentStep)) {
+      selectedCamera = getUnlockedCameras(currentStep).at(-1) ?? 1;
     }
 
     render();
@@ -471,7 +499,7 @@ function setupPlayerCameraControls() {
   function render() {
     buttons.forEach((button) => {
       const cameraNumber = Number(button.dataset.cameraButton);
-      const isUnlocked = cameraNumber <= currentStep;
+      const isUnlocked = isCameraUnlocked(cameraNumber, currentStep);
       const isActive = isUnlocked && cameraNumber === selectedCamera;
 
       button.disabled = !isUnlocked;
@@ -485,16 +513,34 @@ function setupPlayerCameraControls() {
 
     lockedLayers.forEach((layer) => {
       const cameraNumber = Number(layer.dataset.cameraLockedLayer);
-      layer.classList.toggle("is-visible", cameraNumber > currentStep);
+      layer.classList.toggle("is-visible", !isCameraUnlocked(cameraNumber, currentStep));
     });
 
     activeLayers.forEach((layer) => {
       const cameraNumber = Number(layer.dataset.cameraActiveLayer);
       layer.classList.toggle(
         "is-visible",
-        cameraNumber <= currentStep && cameraNumber === selectedCamera,
+        isCameraUnlocked(cameraNumber, currentStep) && cameraNumber === selectedCamera,
       );
     });
+
+    renderCameraFeed();
+  }
+
+  function renderCameraFeed() {
+    const frameStep = getCameraFrameStep(selectedCamera, currentStep);
+    const hasFrame = Boolean(frameStep);
+
+    feedBase.classList.toggle("is-visible", hasFrame && selectedCamera === 1);
+    if (hasFrame && selectedCamera === 1) {
+      feedBase.src = "./Cam_01_Base.png";
+    }
+
+    feedFrame.classList.toggle("is-visible", hasFrame);
+    if (hasFrame) {
+      feedFrame.src =
+        `./Cam_${formatNumber(selectedCamera)}_${frameStep}.png`;
+    }
   }
 
   updateStep(1);
@@ -559,6 +605,34 @@ function normalizeStep(value) {
   const step = Number(value);
   if (!Number.isFinite(step)) return 1;
   return Math.min(STEP_COUNT, Math.max(1, Math.round(step)));
+}
+
+function getStepLabel(step) {
+  return STEP_LABELS[normalizeStep(step) - 1];
+}
+
+function getCameraFrameStep(cameraNumber, step) {
+  const frameSteps = CAMERA_FRAME_STEPS[cameraNumber] ?? [];
+  const currentStep = normalizeStep(step);
+
+  return frameSteps
+    .filter((frameStep) => STEP_LABELS.indexOf(frameStep) + 1 <= currentStep)
+    .at(-1);
+}
+
+function getCameraUnlockStep(cameraNumber) {
+  const firstFrameStep = CAMERA_FRAME_STEPS[cameraNumber]?.[0];
+  return firstFrameStep ? STEP_LABELS.indexOf(firstFrameStep) + 1 : STEP_COUNT + 1;
+}
+
+function isCameraUnlocked(cameraNumber, step) {
+  return normalizeStep(step) >= getCameraUnlockStep(cameraNumber);
+}
+
+function getUnlockedCameras(step) {
+  return Array.from({ length: CAMERA_COUNT }, (_, index) => index + 1).filter(
+    (cameraNumber) => isCameraUnlocked(cameraNumber, step),
+  );
 }
 
 function formatNumber(value) {
