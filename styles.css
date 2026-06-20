@@ -622,7 +622,7 @@ button {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 7;
+  z-index: 100;
   width: 360px;
   height: 190px;
   padding: 0;
