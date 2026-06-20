@@ -30,6 +30,7 @@ const firebaseConfig = {
 
 const TEAM_COUNT = 10;
 const STEP_COUNT = 10;
+const CAMERA_COUNT = 9;
 const PRESENCE_ROOT = "control/presence";
 
 const app = initializeApp(firebaseConfig);
@@ -130,6 +131,7 @@ async function renderRoute() {
   if (sequence !== renderSequence) return;
 
   stage.replaceChildren();
+  stage.classList.toggle("is-player", route.mode === "player");
 
   if (route.mode === "staff") {
     renderStaff();
@@ -358,25 +360,49 @@ async function changeStep(state, team, delta) {
 }
 
 function renderPlayer(team) {
-  const cameraButtons = Array.from({ length: 8 }, (_, index) => {
+  const cameraLayers = Array.from({ length: CAMERA_COUNT }, (_, index) => {
+    const buttonNumber = index + 1;
+    const assetNumber = formatNumber(buttonNumber);
+
+    return `
+      <img
+        class="player-camera-layer player-camera-layer-locked"
+        src="./Camera_Button_${assetNumber}-B.png"
+        alt=""
+        data-camera-locked-layer="${buttonNumber}"
+      />
+      <img
+        class="player-camera-layer player-camera-layer-active"
+        src="./Camera_Button_${assetNumber}-A.png"
+        alt=""
+        data-camera-active-layer="${buttonNumber}"
+      />
+    `;
+  }).join("");
+
+  const cameraButtons = Array.from({ length: CAMERA_COUNT }, (_, index) => {
     const buttonNumber = index + 1;
     return `
       <button
-        class="player-camera-button ${buttonNumber === 1 ? "is-active" : ""}"
+        class="player-camera-button"
         type="button"
         data-camera-button="${buttonNumber}"
-        aria-label="上部ボタン${buttonNumber}"
-        aria-pressed="${buttonNumber === 1 ? "true" : "false"}"
+        aria-label="カメラ${formatNumber(buttonNumber)}"
+        aria-pressed="false"
       ></button>
     `;
   }).join("");
 
   stage.innerHTML = `
     <section class="screen player-screen">
+      <img class="player-base-layer player-base-layer-01" src="./Base_01.png" alt="" />
+      <img class="player-base-layer player-base-layer-02" src="./Base_02.png" alt="" />
+      <div class="player-camera-layers" aria-hidden="true">
+        ${cameraLayers}
+      </div>
       <div class="player-camera-controls" aria-label="カメラ操作">
         ${cameraButtons}
       </div>
-      <div class="player-step-number" id="player-step" aria-label="現在のSTEP">--</div>
       <button
         class="hidden-staff-trigger"
         id="hidden-staff-trigger"
@@ -386,7 +412,7 @@ function renderPlayer(team) {
     </section>
   `;
 
-  setupPlayerCameraControls();
+  const cameraControls = setupPlayerCameraControls();
   setupHiddenStaffMenu();
 
   const teamDocument = doc(firestore, "teams", teamDocumentId(team));
@@ -407,11 +433,7 @@ function renderPlayer(team) {
     teamDocument,
     (snapshot) => {
       const step = snapshot.exists() ? normalizeStep(snapshot.data().step) : 1;
-      const label = stage.querySelector("#player-step");
-      if (label) {
-        label.textContent = String(step);
-        label.setAttribute("aria-label", `現在のSTEP ${step}`);
-      }
+      cameraControls.updateStep(step);
     },
     (error) => showToast(`STEPを受信できません: ${error.message}`),
   );
@@ -421,16 +443,63 @@ function renderPlayer(team) {
 
 function setupPlayerCameraControls() {
   const buttons = [...stage.querySelectorAll("[data-camera-button]")];
+  const lockedLayers = [...stage.querySelectorAll("[data-camera-locked-layer]")];
+  const activeLayers = [...stage.querySelectorAll("[data-camera-active-layer]")];
+  let currentStep = 1;
+  let selectedCamera = 1;
 
   buttons.forEach((button) => {
     button.addEventListener("click", () => {
-      buttons.forEach((target) => {
-        const isActive = target === button;
-        target.classList.toggle("is-active", isActive);
-        target.setAttribute("aria-pressed", String(isActive));
-      });
+      const cameraNumber = Number(button.dataset.cameraButton);
+      if (cameraNumber > currentStep) return;
+
+      selectedCamera = cameraNumber;
+      render();
     });
   });
+
+  function updateStep(step) {
+    currentStep = Math.min(CAMERA_COUNT, normalizeStep(step));
+
+    if (selectedCamera > currentStep) {
+      selectedCamera = currentStep;
+    }
+
+    render();
+  }
+
+  function render() {
+    buttons.forEach((button) => {
+      const cameraNumber = Number(button.dataset.cameraButton);
+      const isUnlocked = cameraNumber <= currentStep;
+      const isActive = isUnlocked && cameraNumber === selectedCamera;
+
+      button.disabled = !isUnlocked;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", String(isActive));
+      button.setAttribute(
+        "aria-label",
+        `カメラ${formatNumber(cameraNumber)}${isUnlocked ? "" : " ロック中"}`,
+      );
+    });
+
+    lockedLayers.forEach((layer) => {
+      const cameraNumber = Number(layer.dataset.cameraLockedLayer);
+      layer.classList.toggle("is-visible", cameraNumber > currentStep);
+    });
+
+    activeLayers.forEach((layer) => {
+      const cameraNumber = Number(layer.dataset.cameraActiveLayer);
+      layer.classList.toggle(
+        "is-visible",
+        cameraNumber <= currentStep && cameraNumber === selectedCamera,
+      );
+    });
+  }
+
+  updateStep(1);
+
+  return { updateStep };
 }
 
 function setupHiddenStaffMenu() {
