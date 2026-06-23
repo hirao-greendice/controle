@@ -152,6 +152,13 @@ button {
   transform: translateY(-3px);
 }
 
+.home-team-button:disabled,
+.mode-button:disabled {
+  cursor: wait;
+  filter: brightness(0.42);
+  pointer-events: none;
+}
+
 .mode-buttons {
   display: grid;
   align-content: start;
@@ -195,6 +202,73 @@ button {
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.18em;
+}
+
+.asset-loading-screen {
+  display: grid;
+  place-items: center;
+}
+
+.asset-loading-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px;
+  background: rgba(2, 4, 6, 0.94);
+  backdrop-filter: blur(10px);
+}
+
+.asset-loading-panel h2 {
+  margin: 28px 0 16px;
+  font-family: "Arial Narrow", sans-serif;
+  font-size: 54px;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+}
+
+.asset-loading-label {
+  width: 820px;
+  min-height: 34px;
+  margin: 0 0 28px;
+  overflow: hidden;
+  color: #aab3bb;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-loading-track {
+  width: 820px;
+  height: 18px;
+  overflow: hidden;
+  background: #171d22;
+  border: 1px solid #39434c;
+}
+
+.asset-loading-bar {
+  width: 0;
+  height: 100%;
+  background: var(--green-bright);
+  box-shadow: 0 0 24px rgba(166, 236, 41, 0.4);
+  transition: width 100ms linear;
+}
+
+.asset-loading-count {
+  display: flex;
+  justify-content: space-between;
+  width: 820px;
+  margin-top: 14px;
+  color: #77828c;
+  font-family: "Arial Narrow", sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
 }
 
 .mode-button-giant {

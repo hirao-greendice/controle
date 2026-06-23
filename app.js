@@ -57,6 +57,11 @@ const STEP_NOTES = Object.freeze({
   "5-1": "鉛筆＆ラッパ",
   "6-1": "ゲームクリア",
 });
+// 巨人スタッフへ机上作業を依頼するSTEPと作業内容をここへ追加します。
+// 例: "2-1": "机の上にフラミンゴを置く",
+// 現在は未設定のため、どのSTEPでも依頼は発行されません。
+const DESK_TASKS = Object.freeze({
+});
 const CAMERA_COUNT = 9;
 const CAMERA_FRAME_STEPS = Object.freeze({
   1: STEP_LABELS,
@@ -117,6 +122,12 @@ const PRESENCE_RETRY_DELAY_MS = 3000;
 const PRESENCE_STALE_AFTER_MS = 20000;
 const STAFF_PRESENCE_CHECK_INTERVAL_MS = 5000;
 const PLAYER_CLICK_VOLUME = 0.5;
+const ASSET_CACHE_CONFIG = globalThis.CONTROL_ASSET_CACHE;
+const ASSET_CACHE_NAME = ASSET_CACHE_CONFIG
+  ? `${ASSET_CACHE_CONFIG.cachePrefix}${ASSET_CACHE_CONFIG.version}`
+  : null;
+const ASSET_CACHE_VERSION_KEY = "control-asset-cache-version";
+const ASSET_PRELOAD_CONCURRENCY = 6;
 
 const app = initializeApp(firebaseConfig);
 const firestore = getFirestore(app);
@@ -134,6 +145,14 @@ let presenceSequence = 0;
 let renderSequence = 0;
 let viewCleanups = [];
 let toastTimer = null;
+let assetsReady = false;
+let assetPreloadProgress = {
+  completed: 0,
+  total:
+    (ASSET_CACHE_CONFIG?.coreAssets?.length ?? 0) +
+    (ASSET_CACHE_CONFIG?.mediaAssets?.length ?? 0),
+  label: "準備中",
+};
 
 resizeStage();
 window.addEventListener("resize", resizeStage);
@@ -194,10 +213,270 @@ onValue(
   },
 );
 
-renderRoute();
+bootstrapApplication();
 
 function preventPageZoom(event) {
   event.preventDefault();
+}
+
+async function bootstrapApplication() {
+  if (route.mode === "home") {
+    await renderRoute();
+  } else {
+    renderAssetLoadingScreen();
+  }
+
+  let preloadError = null;
+  try {
+    await prepareApplicationAssets();
+  } catch (error) {
+    preloadError = error;
+    console.error("Asset preload failed:", error);
+  }
+
+  assetsReady = true;
+
+  if (route.mode === "home") {
+    finishHomeAssetLoading(preloadError);
+  } else {
+    await renderRoute();
+    if (preloadError) {
+      showToast(`一部素材の事前読込に失敗しました: ${preloadError.message}`);
+    }
+  }
+}
+
+function renderAssetLoadingScreen() {
+  stage.innerHTML = `
+    <section class="screen asset-loading-screen">
+      ${assetLoadingPanelMarkup()}
+    </section>
+  `;
+  updateAssetLoadingProgress(assetPreloadProgress);
+}
+
+function assetLoadingPanelMarkup() {
+  const version = ASSET_CACHE_CONFIG?.version ?? "unknown";
+  return `
+    <div class="asset-loading-panel" data-asset-loading-panel>
+      <p class="eyebrow">SYSTEM PREPARATION</p>
+      <h2>素材を読み込んでいます</h2>
+      <p class="asset-loading-label" data-asset-loading-label>準備中</p>
+      <div class="asset-loading-track">
+        <div class="asset-loading-bar" data-asset-loading-bar></div>
+      </div>
+      <div class="asset-loading-count">
+        <span data-asset-loading-count>0 / ${assetPreloadProgress.total}</span>
+        <span>VERSION ${version}</span>
+      </div>
+    </div>
+  `;
+}
+
+function updateAssetLoadingProgress(progress) {
+  assetPreloadProgress = progress;
+  const percent =
+    progress.total > 0
+      ? Math.min(100, Math.round((progress.completed / progress.total) * 100))
+      : 100;
+
+  document.querySelectorAll("[data-asset-loading-bar]").forEach((bar) => {
+    bar.style.width = `${percent}%`;
+  });
+  document.querySelectorAll("[data-asset-loading-label]").forEach((label) => {
+    label.textContent = progress.label;
+  });
+  document.querySelectorAll("[data-asset-loading-count]").forEach((count) => {
+    count.textContent = `${progress.completed} / ${progress.total}`;
+  });
+}
+
+function finishHomeAssetLoading(error) {
+  stage.querySelectorAll(
+    ".home-team-button, #open-staff, #open-master, #open-giant",
+  ).forEach((button) => {
+    button.disabled = false;
+  });
+
+  const panel = stage.querySelector("[data-asset-loading-panel]");
+  if (panel) panel.remove();
+
+  if (error) {
+    showToast(`一部素材の事前読込に失敗しました: ${error.message}`);
+  }
+}
+
+async function prepareApplicationAssets() {
+  if (
+    !ASSET_CACHE_CONFIG ||
+    !Array.isArray(ASSET_CACHE_CONFIG.coreAssets) ||
+    !Array.isArray(ASSET_CACHE_CONFIG.mediaAssets)
+  ) {
+    throw new Error("素材キャッシュ設定を読み込めません");
+  }
+
+  await registerAssetServiceWorker();
+
+  const allAssets = [
+    ...ASSET_CACHE_CONFIG.coreAssets,
+    ...ASSET_CACHE_CONFIG.mediaAssets,
+  ];
+  const previousVersion = localStorage.getItem(ASSET_CACHE_VERSION_KEY);
+  const versionChanged = previousVersion !== ASSET_CACHE_CONFIG.version;
+  const cache =
+    "caches" in window && ASSET_CACHE_NAME
+      ? await caches.open(ASSET_CACHE_NAME)
+      : null;
+  let completed = 0;
+  let nextAssetIndex = 0;
+
+  updateAssetLoadingProgress({
+    completed,
+    total: allAssets.length,
+    label: versionChanged ? "新しい素材を取得中" : "キャッシュを確認中",
+  });
+
+  const workers = Array.from(
+    { length: Math.min(ASSET_PRELOAD_CONCURRENCY, allAssets.length) },
+    async () => {
+      while (nextAssetIndex < allAssets.length) {
+        const asset = allAssets[nextAssetIndex];
+        nextAssetIndex += 1;
+
+        await cacheAndWarmAsset(asset, cache, versionChanged);
+        completed += 1;
+        updateAssetLoadingProgress({
+          completed,
+          total: allAssets.length,
+          label: assetFileName(asset),
+        });
+      }
+    },
+  );
+
+  await Promise.all(workers);
+
+  if ("caches" in window && ASSET_CACHE_NAME) {
+    const cacheNames = await caches.keys();
+    await Promise.all(
+      cacheNames
+        .filter(
+          (name) =>
+            name.startsWith(ASSET_CACHE_CONFIG.cachePrefix) &&
+            name !== ASSET_CACHE_NAME,
+        )
+        .map((name) => caches.delete(name)),
+    );
+  }
+
+  localStorage.setItem(ASSET_CACHE_VERSION_KEY, ASSET_CACHE_CONFIG.version);
+  updateAssetLoadingProgress({
+    completed: allAssets.length,
+    total: allAssets.length,
+    label: "読込完了",
+  });
+}
+
+async function registerAssetServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  if (
+    window.location.protocol !== "https:" &&
+    window.location.hostname !== "localhost" &&
+    window.location.hostname !== "127.0.0.1"
+  ) {
+    return;
+  }
+
+  try {
+    await navigator.serviceWorker.register("./service-worker.js", {
+      scope: "./",
+      updateViaCache: "none",
+    });
+    await navigator.serviceWorker.ready;
+  } catch (error) {
+    console.warn("Service Worker registration failed:", error);
+  }
+}
+
+async function cacheAndWarmAsset(asset, cache, forceReload) {
+  const url = new URL(asset, window.location.href);
+  const request = new Request(url, {
+    cache: forceReload ? "reload" : "default",
+    credentials: "same-origin",
+  });
+  let response = cache && !forceReload ? await cache.match(request) : null;
+
+  if (!response) {
+    response = await fetch(request);
+    if (!response.ok) {
+      throw new Error(`${assetFileName(asset)} (${response.status})`);
+    }
+    if (cache) await cache.put(request, response.clone());
+  }
+
+  if (isImageAsset(asset)) {
+    await decodeImageAsset(url.href);
+  } else if (isAudioAsset(asset)) {
+    await preloadAudioAsset(url.href);
+  }
+}
+
+function isImageAsset(asset) {
+  return /\.(?:png|jpe?g|webp|gif|svg)$/i.test(asset);
+}
+
+function isAudioAsset(asset) {
+  return /\.(?:mp3|wav|ogg)$/i.test(asset);
+}
+
+function decodeImageAsset(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error(`${assetFileName(url)}の画像展開に失敗しました`));
+    image.src = url;
+
+    image.decode?.().then(resolve).catch(() => {
+      // Safariではdecode()が失敗してもonloadで正常に利用できる場合があります。
+    });
+  });
+}
+
+function preloadAudioAsset(url) {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio();
+    const timeout = window.setTimeout(resolve, 8000);
+
+    const finish = () => {
+      window.clearTimeout(timeout);
+      audio.removeEventListener("canplaythrough", finish);
+      audio.removeEventListener("error", fail);
+      resolve();
+    };
+    const fail = () => {
+      window.clearTimeout(timeout);
+      reject(new Error(`${assetFileName(url)}の音声展開に失敗しました`));
+    };
+
+    audio.preload = "auto";
+    audio.addEventListener("canplaythrough", finish, { once: true });
+    audio.addEventListener("error", fail, { once: true });
+    audio.src = url;
+    audio.load();
+  });
+}
+
+function assetFileName(asset) {
+  try {
+    return (
+      decodeURIComponent(
+        new URL(asset, window.location.href).pathname.split("/").at(-1),
+      ) || "ホーム画面"
+    );
+  } catch {
+    return asset;
+  }
 }
 
 function getClientId() {
@@ -332,7 +611,8 @@ function renderHome() {
     const team = index + 1;
     return `
       <button class="home-team-button" type="button" data-team="${team}"
-        aria-label="チーム${team}のプレイヤー画面を開く">${team}</button>
+        aria-label="チーム${team}のプレイヤー画面を開く"
+        ${assetsReady ? "" : "disabled"}>${team}</button>
     `;
   }).join("");
 
@@ -351,13 +631,14 @@ function renderHome() {
           ${teamButtons}
         </div>
         <div class="mode-buttons">
-          <button class="mode-button" id="open-staff" type="button">STAFF</button>
-          <button class="mode-button" id="open-master" type="button">MASTER</button>
-          <button class="mode-button mode-button-giant" id="open-giant" type="button">
+          <button class="mode-button" id="open-staff" type="button" ${assetsReady ? "" : "disabled"}>STAFF</button>
+          <button class="mode-button" id="open-master" type="button" ${assetsReady ? "" : "disabled"}>MASTER</button>
+          <button class="mode-button mode-button-giant" id="open-giant" type="button" ${assetsReady ? "" : "disabled"}>
             巨人スタッフ
           </button>
         </div>
       </div>
+      ${assetsReady ? "" : assetLoadingPanelMarkup()}
     </section>
   `;
 
@@ -795,6 +1076,7 @@ function updateGiantStaffView(state) {
     const task = state.deskTasks.get(team) ?? normalizeDeskTask();
     const isPending = task.status === "pending";
     const isDone = task.status === "done";
+    const hasTask = isPending || isDone;
     const isUpdating = state.pendingTeams.has(team);
 
     return `
@@ -804,8 +1086,8 @@ function updateGiantStaffView(state) {
           <strong>${formatNumber(team)}</strong>
         </div>
         <div class="giant-team-task">
-          <span>${task.step ? `STEP ${getStepLabel(task.step)}` : "DESK TASK"}</span>
-          <b>${task.step ? getDeskTaskInstruction(task.step) : "依頼待機中"}</b>
+          <span>${hasTask && task.step ? `STEP ${getStepLabel(task.step)}` : "DESK TASK"}</span>
+          <b>${hasTask ? task.instruction || "机上作業" : "依頼待機中"}</b>
         </div>
         <div class="giant-team-status">
           <span>${isPending ? "実行待ち" : isDone ? "完了済み" : "待機中"}</span>
@@ -1157,21 +1439,29 @@ async function changeStep(state, team, delta, routeTarget = null) {
         nextVisitedStep32 = true;
       }
 
+      const currentDeskTask = normalizeDeskTask(teamData);
+      const deskTaskInstruction =
+        delta > 0 ? getConfiguredDeskTaskInstruction(nextStep) : null;
+      const deskTaskUpdate = deskTaskInstruction
+        ? {
+            deskTaskStatus: "pending",
+            deskTaskStep: nextStep,
+            deskTaskInstruction,
+            deskTaskRevision: currentDeskTask.revision + 1,
+            deskTaskRequestedAt: firestoreServerTimestamp(),
+            deskTaskRequestedBy: clientId,
+          }
+        : delta > 0 && currentDeskTask.status === "done"
+          ? { deskTaskStatus: "idle" }
+          : {};
+
       transaction.set(
         teamDocument,
         {
           teamNumber: team,
           step: nextStep,
           visitedStep32: nextVisitedStep32,
-          ...(delta > 0
-            ? {
-                deskTaskStatus: "pending",
-                deskTaskStep: nextStep,
-                deskTaskRevision: normalizeDeskTask(teamData).revision + 1,
-                deskTaskRequestedAt: firestoreServerTimestamp(),
-                deskTaskRequestedBy: clientId,
-              }
-            : {}),
+          ...deskTaskUpdate,
           updatedAt: firestoreServerTimestamp(),
           updatedBy: clientId,
         },
@@ -1846,12 +2136,22 @@ function normalizeVisitedStep32(teamData) {
 }
 
 function normalizeDeskTask(teamData = {}) {
-  const status =
-    teamData?.deskTaskStatus === "pending" || teamData?.deskTaskStatus === "done"
+  const savedStatus =
+    teamData?.deskTaskStatus === "pending" ||
+    teamData?.deskTaskStatus === "done" ||
+    teamData?.deskTaskStatus === "idle"
       ? teamData.deskTaskStatus
       : "idle";
   const step = Number(teamData?.deskTaskStep);
   const revision = Number(teamData?.deskTaskRevision);
+  const instruction =
+    typeof teamData?.deskTaskInstruction === "string"
+      ? teamData.deskTaskInstruction.trim()
+      : "";
+  const status =
+    instruction || savedStatus === "idle"
+      ? savedStatus
+      : "idle";
 
   return {
     status,
@@ -1863,13 +2163,16 @@ function normalizeDeskTask(teamData = {}) {
       Number.isInteger(revision) && revision >= 0
         ? revision
         : 0,
+    instruction,
   };
 }
 
-function getDeskTaskInstruction(step) {
+function getConfiguredDeskTaskInstruction(step) {
   const label = getStepLabel(step);
-  const note = getStepNote(step);
-  return note ? `${note}の机上作業` : `STEP ${label}の机上作業`;
+  const instruction = DESK_TASKS[label];
+  return typeof instruction === "string" && instruction.trim()
+    ? instruction.trim()
+    : null;
 }
 
 function deskTaskStatusMarkup(task) {

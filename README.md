@@ -62,8 +62,9 @@ teams/team-01
   teamNumber: 1
   step: 1
   visitedStep32: true | false
-  deskTaskStatus: pending | done
+  deskTaskStatus: idle | pending | done
   deskTaskStep: 1
+  deskTaskInstruction: 机の上に○○を置く
   deskTaskRevision: 1
   deskTaskRequestedAt: server timestamp
   deskTaskRequestedBy: client id
@@ -77,6 +78,18 @@ teams/team-01
 4-1へ直接進む場合は確認画面を表示し、プレイヤー画面の3-2ログだけを非表示にします。
 それ以外のSTEP表示や機能は通常どおり進みます。`visitedStep32`が存在しない既存データは、
 3-2以降なら通常ルートとして扱います。
+
+## 巨人スタッフの対象STEP設定
+
+`app.js`上部の`DESK_TASKS`へ、対象STEPと作業内容を追加します。
+未設定のSTEPでは机上作業依頼は発行されません。現在は空のため、全STEPが未設定です。
+
+```js
+const DESK_TASKS = Object.freeze({
+  "2-1": "机の上にフラミンゴを置く",
+  "4-1": "机の上の封筒を交換する",
+});
+```
 
 Realtime Database:
 
@@ -103,3 +116,18 @@ control/game
 スタッフ端末では最終更新から20秒を超えた接続をオフラインとして再判定します。
 
 プレイヤー端末が切断されると、RTDBの`onDisconnect`でpresenceが自動削除されます。
+
+## 素材キャッシュとバージョン更新
+
+ホーム起動時に`asset-cache-config.js`の素材一覧をすべて取得し、画像はデコードまで行います。
+取得済み素材はService WorkerのCache Storageへ保存され、次回以降も再利用されます。
+
+画像・音声・CSS・JavaScriptなどを更新した時は、`asset-cache-config.js`先頭の
+`version`を新しい値へ変更してください。
+
+```js
+version: "2026.06.23.2",
+```
+
+バージョンが変わると新しいキャッシュへ全素材を再取得し、読込完了後に古いキャッシュを
+削除します。素材ファイルを追加した場合は、同ファイルの`mediaAssets`にもパスを追加します。
