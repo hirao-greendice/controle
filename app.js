@@ -2526,16 +2526,17 @@ function connectionBadgeMarkup() {
 }
 
 function updateConnectionBadges() {
+  const version = ASSET_CACHE_CONFIG?.version ?? "unknown";
   document.querySelectorAll("[data-connection-badge]").forEach((badge) => {
     if (rtdbConnected === null) {
       badge.dataset.connected = "pending";
-      badge.textContent = "RTDB CHECKING";
+      badge.textContent = `RTDB CHECKING / ${version}`;
     } else if (rtdbConnected) {
       badge.dataset.connected = "true";
-      badge.textContent = "RTDB ONLINE";
+      badge.textContent = `RTDB ONLINE / ${version}`;
     } else {
       badge.dataset.connected = "false";
-      badge.textContent = "RTDB OFFLINE";
+      badge.textContent = `RTDB OFFLINE / ${version}`;
     }
   });
 }
