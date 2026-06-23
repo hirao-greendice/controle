@@ -72,6 +72,12 @@ const DESK_TASKS = Object.freeze({
 const DESK_TASK_STEPS = Object.freeze(
   Object.keys(DESK_TASKS).map((stepLabel) => STEP_LABELS.indexOf(stepLabel) + 1),
 );
+const DESK_TASK_NAMES = Object.freeze({
+  "1-1": "消しゴム",
+  "2-1": "番号札を切る",
+  "2-2": "番号札を外す",
+  "4-2": "イス",
+});
 const CAMERA_COUNT = 9;
 const CAMERA_FRAME_STEPS = Object.freeze({
   1: STEP_LABELS,
@@ -918,8 +924,7 @@ function renderMaster() {
       <header class="staff-topbar">
         <div class="staff-brand">
           <button class="nav-button" id="master-home" type="button">← HOME</button>
-          <h1>MASTER CONTROL</h1>
-          <p class="eyebrow">GAME SYSTEM OVERVIEW</p>
+          <h1>MASTER</h1>
         </div>
         <div class="staff-topbar-actions">${connectionBadgeMarkup()}</div>
       </header>
@@ -927,25 +932,20 @@ function renderMaster() {
       <div class="master-layout">
         <section class="master-team-panel" aria-labelledby="master-team-title">
           <div class="master-section-heading">
-            <div>
-              <p class="eyebrow">PLAYER TERMINALS</p>
-              <h2 id="master-team-title">TEAM STATUS</h2>
+            <h2 id="master-team-title">チーム状況</h2>
+            <div class="master-summary">
+              <div class="master-online-count" id="master-online-count">接続 0 / ${TEAM_COUNT}</div>
+              <div class="master-desk-count" id="master-desk-count">机依頼 0</div>
             </div>
-            <div class="master-online-count" id="master-online-count">0 / ${TEAM_COUNT} ONLINE</div>
           </div>
           <div class="master-team-grid" id="master-team-grid"></div>
         </section>
 
         <aside class="master-game-panel" aria-labelledby="master-game-title">
-          <p class="eyebrow">GLOBAL CONTROL</p>
-          <h2 id="master-game-title">GAME</h2>
+          <h2 id="master-game-title">公演状態</h2>
           <div class="master-game-status" id="master-game-status" data-status="idle">
-            <span>CURRENT STATUS</span>
-            <strong>STANDBY</strong>
+            <strong>開始前</strong>
           </div>
-          <p class="master-game-description" id="master-game-description">
-            ゲーム開始待機中です
-          </p>
           <div class="master-game-actions">
             <button class="master-game-button is-start" id="game-start" type="button">
               ゲーム開始
@@ -954,9 +954,6 @@ function renderMaster() {
               ゲーム終了
             </button>
           </div>
-          <p class="master-game-note">
-            終了すると、全プレイヤー画面の手前に終了画像を表示します。
-          </p>
         </aside>
       </div>
 
@@ -991,6 +988,7 @@ function renderMaster() {
     presenceByTeam: {},
     serverTimeOffset: null,
     steps: new Map(),
+    deskTasks: new Map(),
     gameStatus: "idle",
     pendingGameStatus: false,
     confirmationStatus: null,
@@ -1032,8 +1030,11 @@ function renderMaster() {
 
         if (change.type === "removed") {
           state.steps.delete(team);
+          state.deskTasks.delete(team);
         } else {
-          state.steps.set(team, normalizeStep(change.doc.data().step));
+          const teamData = change.doc.data();
+          state.steps.set(team, normalizeStep(teamData.step));
+          state.deskTasks.set(team, normalizeDeskTask(teamData));
         }
       });
       updateMasterView(state);
@@ -1289,19 +1290,42 @@ function updateMasterView(state) {
     const team = index + 1;
     const isOnline = state.activeTeams.includes(team);
     const step = state.steps.get(team) ?? 1;
+    const task = state.deskTasks.get(team) ?? normalizeDeskTask();
+    const isDeskPending = task.status === "pending";
+    const latestCompletedStep = task.completedSteps.at(-1) ?? null;
+    const displayedTaskStep = isDeskPending ? task.step : latestCompletedStep;
+    const displayedTaskName = displayedTaskStep
+      ? getDeskTaskName(displayedTaskStep)
+      : "机作業";
+    const deskStatus = isDeskPending
+      ? "準備中"
+      : latestCompletedStep
+        ? "完了"
+        : "未着手";
+    const progressMarkup = DESK_TASK_STEPS.map((taskStep, taskIndex) => {
+      const isComplete = task.completedSteps.includes(taskStep);
+      const isCurrent = isDeskPending && task.step === taskStep;
+      return `
+        <span
+          class="master-desk-progress-box ${isComplete ? "is-complete" : ""} ${isCurrent ? "is-current" : ""}"
+          aria-label="${taskIndex + 1}つ目${isComplete ? " 完了" : isCurrent ? " 準備中" : " 未完了"}"
+        >${isComplete ? "✓" : taskIndex + 1}</span>
+      `;
+    }).join("");
 
     return `
-      <article class="master-team-card ${isOnline ? "is-online" : "is-offline"}">
+      <article class="master-team-card ${isOnline ? "is-online" : "is-offline"} ${isDeskPending ? "has-desk-task" : ""}">
         <div class="master-team-number">${formatNumber(team)}</div>
-        <div class="master-team-detail">
-          <div class="master-team-note">
-            <span>INFO</span>
-            <b>${isOnline ? getStepNote(step) || "—" : "—"}</b>
-          </div>
+        <div class="master-team-progress">
+          <strong>${getStepLabel(step)}</strong>
+          <b>${getStepNote(step) || "—"}</b>
         </div>
-        <div class="master-team-step">
-          <span>STEP</span>
-          <strong>${isOnline ? getStepLabel(step) : "—"}</strong>
+        <div class="master-team-desk">
+          <div class="master-desk-current ${isDeskPending ? "is-pending" : latestCompletedStep ? "is-done" : ""}">
+            <b>${displayedTaskName}</b>
+            <strong>${deskStatus}</strong>
+          </div>
+          <div class="master-desk-progress">${progressMarkup}</div>
         </div>
       </article>
     `;
@@ -1309,25 +1333,30 @@ function updateMasterView(state) {
 
   const onlineCount = stage.querySelector("#master-online-count");
   if (onlineCount) {
-    onlineCount.textContent = `${state.activeTeams.length} / ${TEAM_COUNT} ONLINE`;
+    onlineCount.textContent = `接続 ${state.activeTeams.length} / ${TEAM_COUNT}`;
+  }
+  const deskCount = stage.querySelector("#master-desk-count");
+  if (deskCount) {
+    const pendingDeskCount = [...state.deskTasks.values()].filter(
+      (task) => task.status === "pending",
+    ).length;
+    deskCount.textContent = `机依頼 ${pendingDeskCount}`;
   }
 
   const status = normalizeGameStatus(state.gameStatus);
   const statusElement = stage.querySelector("#master-game-status");
-  const description = stage.querySelector("#master-game-description");
   const startButton = stage.querySelector("#game-start");
   const endButton = stage.querySelector("#game-end");
-  if (!statusElement || !description || !startButton || !endButton) return;
+  if (!statusElement || !startButton || !endButton) return;
 
   const statusContent = {
-    idle: { label: "STANDBY", description: "ゲーム開始待機中です" },
-    running: { label: "RUNNING", description: "ゲーム進行中です" },
-    ended: { label: "ENDED", description: "全プレイヤー画面に終了画像を表示中です" },
+    idle: "開始前",
+    running: "進行中",
+    ended: "終了",
   }[status];
 
   statusElement.dataset.status = status;
-  statusElement.querySelector("strong").textContent = statusContent.label;
-  description.textContent = statusContent.description;
+  statusElement.querySelector("strong").textContent = statusContent;
   startButton.disabled = state.pendingGameStatus || status === "running";
   endButton.disabled = state.pendingGameStatus || status === "ended";
 }
@@ -2480,6 +2509,10 @@ function getConfiguredDeskTaskInstruction(step) {
   return typeof instruction === "string" && instruction.trim()
     ? instruction.trim()
     : null;
+}
+
+function getDeskTaskName(step) {
+  return DESK_TASK_NAMES[getStepLabel(step)] ?? "机作業";
 }
 
 function deskTaskStatusMarkup(task) {

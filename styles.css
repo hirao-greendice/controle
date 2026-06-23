@@ -737,8 +737,8 @@ button {
 
 .master-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
-  gap: 30px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 24px;
   height: 1012px;
   margin-top: 27px;
 }
@@ -790,6 +790,7 @@ button {
 }
 
 .giant-team-grid {
+  display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   grid-template-rows: repeat(2, 1fr);
   gap: 16px;
@@ -938,71 +939,82 @@ button {
   font-weight: 1000;
 }
 
-.master-team-panel {
+.master-layout .master-team-panel {
   min-width: 0;
-  padding: 32px;
+  padding: 26px;
 }
 
 .master-section-heading {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  height: 76px;
-  margin-bottom: 24px;
+  height: 66px;
+  margin-bottom: 20px;
 }
 
 .master-section-heading h2,
 .master-game-panel h2 {
-  margin: 10px 0 0;
-  font-family: "Arial Narrow", sans-serif;
-  font-size: 42px;
-  font-weight: 300;
-  letter-spacing: 0.13em;
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
 }
 
-.master-online-count {
-  padding: 13px 17px;
+.master-summary {
+  display: flex;
+  gap: 10px;
+}
+
+.master-online-count,
+.master-desk-count {
+  min-width: 116px;
+  padding: 11px 14px;
   color: #9ca6af;
   background: #11161a;
   border: 1px solid #303840;
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: center;
+  white-space: nowrap;
 }
 
-.master-team-grid {
+.master-desk-count {
+  color: #f0b760;
+  border-color: #6e5127;
+}
+
+.master-layout .master-team-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   grid-template-rows: repeat(2, 1fr);
-  gap: 18px;
-  height: 848px;
+  gap: 14px;
+  height: 874px;
 }
 
 .master-team-card {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: 120px minmax(0, 1fr) 96px;
+  grid-template-rows: 76px 126px minmax(0, 1fr);
   align-items: stretch;
   min-width: 0;
   overflow: hidden;
-  background: #151a1f;
-  border: 1px solid #303840;
+  background: #11161a;
+  border: 1px solid #2d353c;
 }
 
-.master-team-card.is-online {
-  background: linear-gradient(180deg, rgba(143, 208, 24, 0.16), #151a1f 45%);
-  border-color: rgba(166, 236, 41, 0.55);
-  box-shadow: inset 0 4px 0 var(--green-bright);
+.master-team-card.has-desk-task {
+  border-color: #d98d2d;
+  box-shadow: inset 0 4px 0 #f2a83b;
 }
 
 .master-team-number {
   display: grid;
   place-items: center;
-  color: #626c75;
-  background: rgba(0, 0, 0, 0.26);
-  border-bottom: 1px solid #303840;
+  color: #68727b;
+  background: #1a2025;
+  border-bottom: 1px solid #2d353c;
   font-family: "Arial Narrow", sans-serif;
-  font-size: 66px;
+  font-size: 46px;
   font-weight: 300;
   letter-spacing: 0.04em;
 }
@@ -1013,91 +1025,125 @@ button {
   border-bottom-color: rgba(255, 255, 255, 0.34);
 }
 
-.master-team-detail,
-.master-team-step {
+.master-team-progress {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-}
-
-.master-team-detail {
   align-items: center;
+  justify-content: center;
   min-width: 0;
-  padding: 20px 14px;
+  padding: 14px;
   text-align: center;
 }
 
-.master-team-step {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 22px;
-  border-top: 1px solid #303840;
+.master-team-progress strong {
+  color: #f1f3f5;
+  font-family: "Arial Narrow", sans-serif;
+  font-size: 33px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
 }
 
-.master-team-detail span,
-.master-team-step span {
-  color: #707b85;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-}
-
-.master-team-note {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.master-team-progress b {
   width: 100%;
-  height: 100%;
-  min-width: 0;
-}
-
-.master-team-note span {
-  color: #707b85;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-}
-
-.master-team-note b {
-  width: 100%;
-  margin-top: 16px;
+  margin-top: 10px;
   overflow: hidden;
-  color: #d8dde2;
-  font-size: 23px;
+  color: #c2c9cf;
+  font-size: 20px;
   letter-spacing: 0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.master-team-card.is-offline .master-team-note b {
-  color: #68727b;
+.master-team-card.is-offline .master-team-progress strong,
+.master-team-card.is-offline .master-team-progress b {
+  color: #737d85;
 }
 
-.master-team-step strong {
-  margin-top: 0;
-  color: #68727b;
+.master-team-desk {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 58px;
+  min-height: 0;
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid #2d353c;
+}
+
+.master-desk-current {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  text-align: center;
+}
+
+.master-desk-current b {
+  width: 100%;
+  overflow: hidden;
+  color: #79838c;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.master-desk-current strong {
+  margin-top: 9px;
+  color: #626d76;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.master-desk-current.is-pending b,
+.master-desk-current.is-pending strong {
+  color: #ffc36a;
+}
+
+.master-desk-current.is-done strong {
+  color: var(--green-bright);
+}
+
+.master-desk-progress {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  align-items: stretch;
+  margin-top: 10px;
+}
+
+.master-desk-progress-box {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  color: #59636c;
+  background: #171d22;
+  border: 1px solid #303941;
+  border-radius: 3px;
   font-family: "Arial Narrow", sans-serif;
-  font-size: 34px;
-  font-weight: 300;
+  font-size: 17px;
+  font-weight: 800;
 }
 
-.master-team-card.is-online .master-team-step strong {
-  color: #fff;
+.master-desk-progress-box.is-current {
+  color: #f2a83b;
+  border-color: #d98d2d;
+}
+
+.master-desk-progress-box.is-complete {
+  color: #0c1406;
+  background: var(--green-bright);
+  border-color: #c6ff61;
 }
 
 .master-game-panel {
-  padding: 42px 36px;
+  padding: 34px 30px;
 }
 
 .master-game-status {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  place-items: center;
   justify-content: center;
-  height: 218px;
-  margin-top: 52px;
-  padding: 0 30px;
+  height: 190px;
+  margin-top: 34px;
   background: #151a1f;
   border: 1px solid #353e46;
   box-shadow: inset 6px 0 0 #69747e;
@@ -1115,37 +1161,20 @@ button {
   box-shadow: inset 6px 0 0 var(--offline);
 }
 
-.master-game-status span {
-  color: #89939c;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-}
-
 .master-game-status strong {
-  margin-top: 18px;
-  font-family: "Arial Narrow", sans-serif;
-  font-size: 56px;
-  font-weight: 300;
-  letter-spacing: 0.1em;
-}
-
-.master-game-description {
-  min-height: 58px;
-  margin: 24px 0 34px;
-  color: #aab2b9;
-  font-size: 19px;
-  font-weight: 700;
-  line-height: 1.55;
+  font-size: 48px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
 }
 
 .master-game-actions {
   display: grid;
-  gap: 22px;
+  gap: 18px;
+  margin-top: 30px;
 }
 
 .master-game-button {
-  height: 118px;
+  height: 110px;
   border: 1px solid transparent;
   cursor: pointer;
   font-size: 32px;
@@ -1180,13 +1209,6 @@ button {
   background: #20252a;
   border-color: #303840;
   cursor: not-allowed;
-}
-
-.master-game-note {
-  margin: 34px 0 0;
-  color: #747e87;
-  font-size: 16px;
-  line-height: 1.75;
 }
 
 .master-confirm-backdrop {
