@@ -116,6 +116,7 @@ const PRESENCE_HEARTBEAT_INTERVAL_MS = 5000;
 const PRESENCE_RETRY_DELAY_MS = 3000;
 const PRESENCE_STALE_AFTER_MS = 20000;
 const STAFF_PRESENCE_CHECK_INTERVAL_MS = 5000;
+const PLAYER_CLICK_VOLUME = 0.5;
 
 const app = initializeApp(firebaseConfig);
 const firestore = getFirestore(app);
@@ -1201,6 +1202,9 @@ function setupPlayerClickSound() {
       return sound;
     }),
   ];
+  soundPool.forEach((sound) => {
+    sound.volume = PLAYER_CLICK_VOLUME;
+  });
   let nextSoundIndex = 0;
   const AudioContextClass = window.AudioContext ?? window.webkitAudioContext;
   const audioContext = AudioContextClass ? new AudioContextClass() : null;
@@ -1223,8 +1227,11 @@ function setupPlayerClickSound() {
     if (!audioContext || !clickSoundBuffer || audioContext.state !== "running") return;
 
     const source = audioContext.createBufferSource();
+    const gain = audioContext.createGain();
     source.buffer = clickSoundBuffer;
-    source.connect(audioContext.destination);
+    gain.gain.value = PLAYER_CLICK_VOLUME;
+    source.connect(gain);
+    gain.connect(audioContext.destination);
     source.start();
   };
 
