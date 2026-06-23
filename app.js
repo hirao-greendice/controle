@@ -61,10 +61,13 @@ const STEP_NOTES = Object.freeze({
   "5-1": "鉛筆＆ラッパ",
   "6-1": "ゲームクリア",
 });
-// 巨人スタッフへ机上作業を依頼するSTEPと作業内容をここへ追加します。
+// そのSTEPから先へ進める時、巨人スタッフへ依頼する作業内容を設定します。
 // 例: "2-1": "机の上にフラミンゴを置く",
-// 現在は未設定のため、どのSTEPでも依頼は発行されません。
 const DESK_TASKS = Object.freeze({
+  "1-1": "消しゴム増やせ",
+  "2-1": "チーム番号札切れ",
+  "2-2": "チーム番号札取り除け",
+  "4-2": "イス倒せ",
 });
 const CAMERA_COUNT = 9;
 const CAMERA_FRAME_STEPS = Object.freeze({
@@ -1549,11 +1552,11 @@ async function changeStep(state, team, delta, routeTarget = null) {
 
       const currentDeskTask = normalizeDeskTask(teamData);
       const deskTaskInstruction =
-        delta > 0 ? getConfiguredDeskTaskInstruction(nextStep) : null;
+        delta > 0 ? getConfiguredDeskTaskInstruction(currentStep) : null;
       const deskTaskUpdate = deskTaskInstruction
         ? {
             deskTaskStatus: "pending",
-            deskTaskStep: nextStep,
+            deskTaskStep: currentStep,
             deskTaskInstruction,
             deskTaskRevision: currentDeskTask.revision + 1,
             deskTaskRequestedAt: firestoreServerTimestamp(),
