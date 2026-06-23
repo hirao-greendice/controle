@@ -1054,6 +1054,9 @@ function renderPlayer(team) {
       <div class="player-log-viewport" data-player-log-viewport aria-label="ロボットの行動ログ">
         <div class="player-log-list" data-player-log-list></div>
       </div>
+      <div class="player-log-scrollbar" data-player-log-scrollbar aria-hidden="true">
+        <div class="player-log-scrollbar-thumb" data-player-log-scrollbar-thumb></div>
+      </div>
       <div class="player-camera-layers" aria-hidden="true">
         ${cameraLayers}
       </div>
@@ -1291,6 +1294,8 @@ function setupPlayerCameraControls() {
   const stepLayer = stage.querySelector("[data-player-step-layer]");
   const logViewport = stage.querySelector("[data-player-log-viewport]");
   const logList = stage.querySelector("[data-player-log-list]");
+  const logScrollbar = stage.querySelector("[data-player-log-scrollbar]");
+  const logScrollbarThumb = stage.querySelector("[data-player-log-scrollbar-thumb]");
   const mapTrigger = stage.querySelector("#player-map-trigger");
   const mapPopup = stage.querySelector("#player-map-popup");
   const mapBase = stage.querySelector("[data-map-base]");
@@ -1305,6 +1310,35 @@ function setupPlayerCameraControls() {
   let selectedMapRoom = "A";
   let visitedStep32 = false;
   let renderedLogState = null;
+
+  const updateLogScrollbar = () => {
+    const scrollRange = logViewport.scrollHeight - logViewport.clientHeight;
+    if (scrollRange <= 0) {
+      logScrollbar.hidden = true;
+      return;
+    }
+
+    logScrollbar.hidden = false;
+    const thumbHeight = Math.max(
+      36,
+      Math.round(
+        logScrollbar.clientHeight *
+          (logViewport.clientHeight / logViewport.scrollHeight),
+      ),
+    );
+    const thumbRange = logScrollbar.clientHeight - thumbHeight;
+    const thumbTop = Math.round(
+      thumbRange * (logViewport.scrollTop / scrollRange),
+    );
+
+    logScrollbarThumb.style.height = `${thumbHeight}px`;
+    logScrollbarThumb.style.transform = `translateY(${thumbTop}px)`;
+  };
+
+  logViewport.addEventListener("scroll", updateLogScrollbar, { passive: true });
+  viewCleanups.push(() => {
+    logViewport.removeEventListener("scroll", updateLogScrollbar);
+  });
 
   buttons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -1437,6 +1471,7 @@ function setupPlayerCameraControls() {
 
     renderedLogState = logState;
     logViewport.scrollTop = logViewport.scrollHeight;
+    requestAnimationFrame(updateLogScrollbar);
   }
 
   function renderMap() {

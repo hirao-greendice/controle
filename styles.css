@@ -948,28 +948,35 @@ button {
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  scrollbar-color: #bd2028 transparent;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .player-log-viewport::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.player-log-scrollbar {
+  position: absolute;
+  top: 262px;
+  left: 1884px;
+  z-index: 4;
   width: 6px;
+  height: 829px;
+  pointer-events: none;
 }
 
-.player-log-viewport::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.player-log-viewport::-webkit-scrollbar-thumb {
-  background: #bd2028;
-  border: 0;
-  border-radius: 0;
-}
-
-.player-log-viewport::-webkit-scrollbar-button {
+.player-log-scrollbar[hidden] {
   display: none;
-  width: 0;
-  height: 0;
+}
+
+.player-log-scrollbar-thumb {
+  width: 6px;
+  height: 36px;
+  background: #bd2028;
+  transform: translateY(0);
 }
 
 .player-log-list {
