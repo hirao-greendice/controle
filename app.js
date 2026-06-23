@@ -1081,6 +1081,7 @@ function renderPlayer(team) {
   `;
 
   const teamDocument = doc(firestore, "teams", teamDocumentId(team));
+  setupPlayerClickSound();
   const cameraControls = setupPlayerCameraControls();
   const savedManualProgress = readLocalPlayerProgress(team);
   let manualStepOverride = savedManualProgress?.step ?? null;
@@ -1169,6 +1170,34 @@ function renderPlayer(team) {
   );
 
   viewCleanups.push(unsubscribe, unsubscribeGame);
+}
+
+function setupPlayerClickSound() {
+  const playerScreen = stage.querySelector(".player-screen");
+  if (!playerScreen) return;
+
+  const clickSound = new Audio("./click.mp3");
+  clickSound.preload = "auto";
+
+  const playClickSound = (event) => {
+    const button = event.target.closest("button");
+    if (
+      !button ||
+      button.disabled ||
+      button.id === "hidden-staff-trigger"
+    ) {
+      return;
+    }
+
+    clickSound.currentTime = 0;
+    clickSound.play().catch(() => {});
+  };
+
+  playerScreen.addEventListener("click", playClickSound);
+  viewCleanups.push(() => {
+    playerScreen.removeEventListener("click", playClickSound);
+    clickSound.pause();
+  });
 }
 
 function setupPlayerCameraControls() {
