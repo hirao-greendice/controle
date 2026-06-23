@@ -54,13 +54,15 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  const assetUrl = new URL(url);
+  assetUrl.search = "";
 
   if (request.mode === "navigate") {
     event.respondWith(networkFirst(request, "./index.html"));
     return;
   }
 
-  if (!assetUrls.has(url.href)) return;
+  if (!assetUrls.has(assetUrl.href)) return;
 
   if (request.headers.has("range")) {
     event.respondWith(rangeResponse(request));
@@ -68,7 +70,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    networkFirstUrls.has(url.href)
+    networkFirstUrls.has(assetUrl.href)
       ? networkFirst(request)
       : cacheFirst(request),
   );

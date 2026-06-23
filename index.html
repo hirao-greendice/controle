@@ -12,7 +12,35 @@
   </head>
   <body>
     <main id="stage" class="stage" aria-live="polite"></main>
-    <script src="./asset-cache-config.js"></script>
-    <script type="module" src="./app.js"></script>
+    <script type="module">
+      const configUrl = new URL("./asset-cache-config.js", window.location.href);
+      configUrl.searchParams.set("load", String(Date.now()));
+      let configResponse;
+      try {
+        configResponse = await fetch(configUrl, {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+      } catch {
+        configResponse = await fetch("./asset-cache-config.js");
+      }
+      if (!configResponse.ok) {
+        throw new Error(`Cache config: ${configResponse.status}`);
+      }
+
+      const configSource = await configResponse.text();
+      (0, eval)(configSource);
+
+      const appUrl = new URL("./app.js", window.location.href);
+      appUrl.searchParams.set(
+        "version",
+        globalThis.CONTROL_ASSET_CACHE.version,
+      );
+      try {
+        await import(appUrl.href);
+      } catch {
+        await import("./app.js");
+      }
+    </script>
   </body>
 </html>

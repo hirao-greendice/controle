@@ -137,6 +137,7 @@ const ASSET_CACHE_NAME = ASSET_CACHE_CONFIG
   : null;
 const ASSET_CACHE_VERSION_KEY = "control-asset-cache-version";
 const ASSET_PRELOAD_CONCURRENCY = 6;
+const APPLICATION_VERSION_CHECK_INTERVAL_MS = 15000;
 
 const app = initializeApp(firebaseConfig);
 const firestore = getFirestore(app);
@@ -223,6 +224,7 @@ onValue(
 );
 
 bootstrapApplication();
+startApplicationVersionWatcher();
 
 function preventPageZoom(event) {
   event.preventDefault();
@@ -405,6 +407,43 @@ async function registerAssetServiceWorker() {
   } catch (error) {
     console.warn("Service Worker registration failed:", error);
   }
+}
+
+function startApplicationVersionWatcher() {
+  if (!ASSET_CACHE_CONFIG?.version) return;
+
+  let updateInProgress = false;
+  const checkForUpdate = async () => {
+    if (updateInProgress || document.visibilityState === "hidden") return;
+
+    try {
+      const configUrl = new URL("./asset-cache-config.js", window.location.href);
+      configUrl.searchParams.set("update-check", String(Date.now()));
+      const response = await fetch(configUrl, {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      if (!response.ok) return;
+
+      const source = await response.text();
+      const latestVersion = source.match(/\bversion:\s*"([^"]+)"/)?.[1];
+      if (
+        latestVersion &&
+        latestVersion !== ASSET_CACHE_CONFIG.version
+      ) {
+        updateInProgress = true;
+        window.location.reload();
+      }
+    } catch {
+      // The regular connection indicators handle offline state.
+    }
+  };
+
+  window.setInterval(checkForUpdate, APPLICATION_VERSION_CHECK_INTERVAL_MS);
+  window.addEventListener("focus", checkForUpdate);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkForUpdate();
+  });
 }
 
 async function cacheAndWarmAsset(asset, cache, forceReload) {
@@ -1065,6 +1104,7 @@ function renderGiantStaff() {
 
   const state = {
     deskTasks: new Map(),
+    steps: new Map(),
     pendingTeams: new Set(),
   };
 
@@ -1077,8 +1117,37 @@ function renderGiantStaff() {
 
         if (change.type === "removed") {
           state.deskTasks.delete(team);
+          state.steps.delete(team);
         } else {
-          state.deskTasks.set(team, normalizeDeskTask(change.doc.data()));
+          const teamData = change.doc.data();
+          const previousStep = state.steps.get(team);
+          const currentStep = normalizeStep(teamData.step);
+          const task = normalizeDeskTask(teamData);
+
+          state.steps.set(team, currentStep);
+          state.deskTasks.set(team, task);
+
+          if (
+            previousStep !== undefined &&
+            currentStep > previousStep
+          ) {
+            const instruction = getConfiguredDeskTaskInstruction(previousStep);
+            if (
+              instruction &&
+              !(
+                task.status === "pending" &&
+                task.step === previousStep &&
+                task.instruction === instruction
+              )
+            ) {
+              ensureDeskTaskForStepTransition(
+                team,
+                previousStep,
+                currentStep,
+                instruction,
+              );
+            }
+          }
         }
       });
       updateGiantStaffView(state);
@@ -1088,6 +1157,49 @@ function renderGiantStaff() {
 
   viewCleanups.push(unsubscribeTeams);
   updateGiantStaffView(state);
+}
+
+async function ensureDeskTaskForStepTransition(
+  team,
+  triggerStep,
+  observedStep,
+  instruction,
+) {
+  const teamDocument = doc(firestore, "teams", teamDocumentId(team));
+
+  try {
+    await runTransaction(firestore, async (transaction) => {
+      const snapshot = await transaction.get(teamDocument);
+      if (!snapshot.exists()) return;
+
+      const teamData = snapshot.data();
+      if (normalizeStep(teamData.step) !== observedStep) return;
+
+      const currentTask = normalizeDeskTask(teamData);
+      if (
+        currentTask.status === "pending" &&
+        currentTask.step === triggerStep &&
+        currentTask.instruction === instruction
+      ) {
+        return;
+      }
+
+      transaction.set(
+        teamDocument,
+        {
+          deskTaskStatus: "pending",
+          deskTaskStep: triggerStep,
+          deskTaskInstruction: instruction,
+          deskTaskRevision: currentTask.revision + 1,
+          deskTaskRequestedAt: firestoreServerTimestamp(),
+          deskTaskRequestedBy: clientId,
+        },
+        { merge: true },
+      );
+    });
+  } catch (error) {
+    showToast(`チーム${team}の机上作業依頼を補完できません: ${error.message}`);
+  }
 }
 
 function refreshStaffPresence(state) {
@@ -1571,6 +1683,7 @@ async function changeStep(state, team, delta, routeTarget = null) {
         {
           teamNumber: team,
           step: nextStep,
+          previousStep: currentStep,
           visitedStep32: nextVisitedStep32,
           ...deskTaskUpdate,
           updatedAt: firestoreServerTimestamp(),
@@ -2255,10 +2368,16 @@ function normalizeDeskTask(teamData = {}) {
       : "idle";
   const step = Number(teamData?.deskTaskStep);
   const revision = Number(teamData?.deskTaskRevision);
+  const normalizedTaskStep =
+    Number.isInteger(step) && step >= 1 && step <= STEP_COUNT
+      ? step
+      : null;
   const instruction =
     typeof teamData?.deskTaskInstruction === "string"
       ? teamData.deskTaskInstruction.trim()
-      : "";
+      : normalizedTaskStep
+        ? getConfiguredDeskTaskInstruction(normalizedTaskStep) ?? ""
+        : "";
   const status =
     instruction || savedStatus === "idle"
       ? savedStatus
@@ -2266,10 +2385,7 @@ function normalizeDeskTask(teamData = {}) {
 
   return {
     status,
-    step:
-      Number.isInteger(step) && step >= 1 && step <= STEP_COUNT
-        ? step
-        : null,
+    step: normalizedTaskStep,
     revision:
       Number.isInteger(revision) && revision >= 0
         ? revision
@@ -2459,6 +2575,7 @@ async function registerPresence(reportError = true) {
       team: presence.team,
       staffGroup: presence.staffGroup,
       clientId,
+      appVersion: ASSET_CACHE_CONFIG?.version ?? "unknown",
       connectedAt: databaseServerTimestamp(),
       lastSeenAt: databaseServerTimestamp(),
     });
@@ -2566,6 +2683,7 @@ async function writePresenceHeartbeat(presence, sequence) {
       mode: presence.mode,
       team: presence.team,
       clientId: presence.clientId,
+      appVersion: ASSET_CACHE_CONFIG?.version ?? "unknown",
       lastSeenAt: databaseServerTimestamp(),
     });
   } catch (error) {
