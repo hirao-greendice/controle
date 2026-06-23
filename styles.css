@@ -948,20 +948,28 @@ button {
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  scrollbar-color: #bd2028 rgba(189, 32, 40, 0.12);
+  scrollbar-color: #bd2028 transparent;
   scrollbar-width: thin;
 }
 
 .player-log-viewport::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .player-log-viewport::-webkit-scrollbar-track {
-  background: rgba(189, 32, 40, 0.08);
+  background: transparent;
 }
 
 .player-log-viewport::-webkit-scrollbar-thumb {
   background: #bd2028;
+  border: 0;
+  border-radius: 0;
+}
+
+.player-log-viewport::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .player-log-list {
