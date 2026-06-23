@@ -31,6 +31,10 @@ const firebaseConfig = {
 };
 
 const TEAM_COUNT = 10;
+const STAFF_TEAM_GROUPS = Object.freeze({
+  first: Object.freeze([1, 2, 3, 4, 5]),
+  second: Object.freeze([6, 7, 8, 9, 10]),
+});
 const STEP_LABELS = Object.freeze([
   "1-1",
   "2-1",
@@ -122,6 +126,8 @@ const PRESENCE_RETRY_DELAY_MS = 3000;
 const PRESENCE_STALE_AFTER_MS = 20000;
 const STAFF_PRESENCE_CHECK_INTERVAL_MS = 5000;
 const PLAYER_CLICK_VOLUME = 0.5;
+const STAFF_CLEAR_VOLUME = 0.8;
+const STAFF_SUZU_VOLUME = 0.7;
 const ASSET_CACHE_CONFIG = globalThis.CONTROL_ASSET_CACHE;
 const ASSET_CACHE_NAME = ASSET_CACHE_CONFIG
   ? `${ASSET_CACHE_CONFIG.cachePrefix}${ASSET_CACHE_CONFIG.version}`
@@ -293,7 +299,7 @@ function updateAssetLoadingProgress(progress) {
 
 function finishHomeAssetLoading(error) {
   stage.querySelectorAll(
-    ".home-team-button, #open-staff, #open-master, #open-giant",
+    ".home-team-button, #open-staff-first, #open-staff-second, #open-master, #open-giant",
   ).forEach((button) => {
     button.disabled = false;
   });
@@ -498,9 +504,15 @@ function resizeStage() {
 function readRoute() {
   const params = new URLSearchParams(window.location.search);
   const mode = params.get("mode");
+  const staffGroup = params.get("group");
   const team = Number(params.get("team"));
 
-  if (mode === "staff") return { mode: "staff" };
+  if (mode === "staff") {
+    return {
+      mode: "staff",
+      staffGroup: staffGroup === "second" ? "second" : "first",
+    };
+  }
   if (mode === "master") return { mode: "master" };
   if (mode === "giant") return { mode: "giant" };
   if (mode === "player" && Number.isInteger(team) && team >= 1 && team <= TEAM_COUNT) {
@@ -556,6 +568,10 @@ function navigate(nextRoute) {
 
   if (nextRoute.mode === "staff") {
     url.searchParams.set("mode", "staff");
+    url.searchParams.set(
+      "group",
+      nextRoute.staffGroup === "second" ? "second" : "first",
+    );
   }
 
   if (nextRoute.mode === "master") {
@@ -586,7 +602,7 @@ async function renderRoute() {
   stage.classList.toggle("is-player", route.mode === "player");
 
   if (route.mode === "staff") {
-    renderStaff();
+    renderStaff(route.staffGroup);
   } else if (route.mode === "master") {
     renderMaster();
   } else if (route.mode === "giant") {
@@ -631,7 +647,14 @@ function renderHome() {
           ${teamButtons}
         </div>
         <div class="mode-buttons">
-          <button class="mode-button" id="open-staff" type="button" ${assetsReady ? "" : "disabled"}>STAFF</button>
+          <button class="mode-button mode-button-staff" id="open-staff-first" type="button" ${assetsReady ? "" : "disabled"}>
+            前半 STAFF
+            <small>TEAM 01–05</small>
+          </button>
+          <button class="mode-button mode-button-staff" id="open-staff-second" type="button" ${assetsReady ? "" : "disabled"}>
+            後半 STAFF
+            <small>TEAM 06–10</small>
+          </button>
           <button class="mode-button" id="open-master" type="button" ${assetsReady ? "" : "disabled"}>MASTER</button>
           <button class="mode-button mode-button-giant" id="open-giant" type="button" ${assetsReady ? "" : "disabled"}>
             巨人スタッフ
@@ -647,8 +670,11 @@ function renderHome() {
       navigate({ mode: "player", team: Number(button.dataset.team) });
     });
   });
-  stage.querySelector("#open-staff").addEventListener("click", () => {
-    navigate({ mode: "staff" });
+  stage.querySelector("#open-staff-first").addEventListener("click", () => {
+    navigate({ mode: "staff", staffGroup: "first" });
+  });
+  stage.querySelector("#open-staff-second").addEventListener("click", () => {
+    navigate({ mode: "staff", staffGroup: "second" });
   });
   stage.querySelector("#open-master").addEventListener("click", () => {
     navigate({ mode: "master" });
@@ -658,14 +684,20 @@ function renderHome() {
   });
 }
 
-function renderStaff() {
+function renderStaff(staffGroup = "first") {
+  const normalizedGroup = staffGroup === "second" ? "second" : "first";
+  const teamNumbers = STAFF_TEAM_GROUPS[normalizedGroup];
+  const groupLabel = normalizedGroup === "first" ? "前半" : "後半";
+  const teamRangeLabel =
+    normalizedGroup === "first" ? "TEAM 01–05" : "TEAM 06–10";
+
   stage.innerHTML = `
-    <section class="screen staff-screen">
+    <section class="screen staff-screen is-split-staff">
       <header class="staff-topbar">
         <div class="staff-brand">
           <button class="nav-button" id="staff-home" type="button">← HOME</button>
-          <h1>STAFF CONTROL</h1>
-          <p class="eyebrow">ACTIVE PLAYER TERMINALS</p>
+          <h1>${groupLabel} STAFF CONTROL</h1>
+          <p class="eyebrow">${teamRangeLabel}</p>
         </div>
         <div class="staff-topbar-actions">${connectionBadgeMarkup()}</div>
       </header>
@@ -682,12 +714,31 @@ function renderStaff() {
           <div class="active-team-controls" id="active-team-controls"></div>
         </section>
       </div>
+
+      <div class="staff-audio-panel" aria-label="スタッフ音声操作">
+        <div class="staff-audio-label">
+          <span>AUDIO CONTROL</span>
+          <strong>この端末から再生</strong>
+        </div>
+        <button class="staff-audio-button is-clear" type="button" data-staff-audio="clear">
+          正解音声
+          <small>CLEAR</small>
+        </button>
+        <button class="staff-audio-button is-suzu" type="button" data-staff-audio="suzu">
+          鈴音声
+          <small>SUZU</small>
+        </button>
+        <audio data-staff-audio-source="clear" src="./clear.mp3" preload="auto" playsinline></audio>
+        <audio data-staff-audio-source="suzu" src="./suzu.mp3" preload="auto" playsinline></audio>
+      </div>
     </section>
   `;
 
   stage.querySelector("#staff-home").addEventListener("click", () => navigate({ mode: "home" }));
+  setupStaffAudioControls();
 
   const state = {
+    teamNumbers,
     activeTeams: [],
     presenceByTeam: {},
     serverTimeOffset: null,
@@ -754,6 +805,59 @@ function renderStaff() {
     () => window.clearInterval(presenceCheckTimer),
   );
   updateStaffView(state);
+}
+
+function setupStaffAudioControls() {
+  const audioSettings = {
+    clear: {
+      volume: STAFF_CLEAR_VOLUME,
+      audio: stage.querySelector('[data-staff-audio-source="clear"]'),
+    },
+    suzu: {
+      volume: STAFF_SUZU_VOLUME,
+      audio: stage.querySelector('[data-staff-audio-source="suzu"]'),
+    },
+  };
+
+  Object.values(audioSettings).forEach(({ audio, volume }) => {
+    if (!audio) return;
+    audio.volume = volume;
+    audio.load();
+  });
+
+  const playStaffAudio = (event) => {
+    const soundName = event.currentTarget.dataset.staffAudio;
+    const setting = audioSettings[soundName];
+    if (!setting?.audio) return;
+
+    try {
+      setting.audio.currentTime = 0;
+    } catch {
+      setting.audio.load();
+    }
+
+    const playResult = setting.audio.play();
+    playResult?.catch?.((error) => {
+      showToast(`音声を再生できません: ${error.message}`);
+    });
+  };
+
+  const buttons = [...stage.querySelectorAll("[data-staff-audio]")];
+  buttons.forEach((button) => {
+    button.addEventListener("click", playStaffAudio);
+  });
+
+  viewCleanups.push(() => {
+    buttons.forEach((button) => {
+      button.removeEventListener("click", playStaffAudio);
+    });
+    Object.values(audioSettings).forEach(({ audio }) => {
+      if (!audio) return;
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    });
+  });
 }
 
 function renderMaster() {
@@ -1238,8 +1342,7 @@ function updateStaffView(state) {
     }
   }
 
-  list.innerHTML = Array.from({ length: TEAM_COUNT }, (_, index) => {
-    const team = index + 1;
+  list.innerHTML = state.teamNumbers.map((team) => {
     const isOnline = state.activeTeams.includes(team);
 
     return `
@@ -1255,8 +1358,7 @@ function updateStaffView(state) {
   const controls = stage.querySelector("#active-team-controls");
   if (!controls) return;
 
-  controls.innerHTML = Array.from({ length: TEAM_COUNT }, (_, index) => {
-      const team = index + 1;
+  controls.innerHTML = state.teamNumbers.map((team) => {
       const isOnline = state.activeTeams.includes(team);
       const step = state.steps.get(team) ?? 1;
       const visitedStep32 =
@@ -1325,8 +1427,7 @@ function updateStaffView(state) {
           >${skippedStep32 && step === STEP_41_INDEX ? "3-1へ戻す" : "戻す"}</button>
         </div>
       `;
-    })
-    .join("");
+    }).join("");
 
   controls.querySelectorAll("[data-step-team]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -2331,6 +2432,7 @@ async function registerPresence(reportError = true) {
     disconnectOperation,
     mode: route.mode,
     team: route.mode === "player" ? route.team : null,
+    staffGroup: route.mode === "staff" ? route.staffGroup : null,
     clientId,
   };
 
@@ -2345,6 +2447,7 @@ async function registerPresence(reportError = true) {
       online: true,
       mode: presence.mode,
       team: presence.team,
+      staffGroup: presence.staffGroup,
       clientId,
       connectedAt: databaseServerTimestamp(),
       lastSeenAt: databaseServerTimestamp(),

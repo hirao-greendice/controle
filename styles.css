@@ -162,18 +162,18 @@ button {
 .mode-buttons {
   display: grid;
   align-content: start;
-  gap: 50px;
+  gap: 22px;
 }
 
 .mode-button {
   width: 310px;
-  height: 160px;
+  height: 126px;
   color: #080a0c;
   background: #f5f5f3;
   border: 0;
   cursor: pointer;
   font-family: "Arial Narrow", sans-serif;
-  font-size: 54px;
+  font-size: 44px;
   font-weight: 300;
   letter-spacing: 0.05em;
   transition:
@@ -197,7 +197,7 @@ button {
 
 .mode-button small {
   display: block;
-  margin-top: 8px;
+  margin-top: 5px;
   font-family: inherit;
   font-size: 17px;
   font-weight: 700;
@@ -272,7 +272,12 @@ button {
 }
 
 .mode-button-giant {
-  font-size: 42px;
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.mode-button-staff {
+  font-size: 36px;
   font-weight: 700;
 }
 
@@ -456,6 +461,100 @@ button {
   align-content: start;
   height: 100%;
   padding: 24px;
+}
+
+.is-split-staff .active-team-list {
+  grid-template-rows: repeat(5, 158px);
+  gap: 14px;
+}
+
+.is-split-staff .staff-team-button {
+  height: 158px;
+  font-size: 64px;
+}
+
+.is-split-staff .staff-layout {
+  height: 910px;
+  margin-top: 20px;
+}
+
+.is-split-staff .active-team-controls {
+  grid-auto-rows: 158px;
+  gap: 14px;
+}
+
+.is-split-staff .step-band,
+.is-split-staff .step-button {
+  height: 158px;
+}
+
+.staff-audio-panel {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 16px;
+  height: 78px;
+  margin: 18px 0 0 138px;
+}
+
+.staff-audio-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-right: 10px;
+  color: #7c8791;
+  text-align: right;
+}
+
+.staff-audio-label span {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.staff-audio-label strong {
+  margin-top: 6px;
+  color: #b2bac2;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+}
+
+.staff-audio-button {
+  width: 260px;
+  color: #080a0c;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 25px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  transition:
+    filter 120ms ease,
+    transform 120ms ease;
+}
+
+.staff-audio-button small {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+}
+
+.staff-audio-button.is-clear {
+  background: var(--green-bright);
+  border-color: #c6ff61;
+}
+
+.staff-audio-button.is-suzu {
+  background: #f2a83b;
+  border-color: #ffd28d;
+}
+
+.staff-audio-button:hover,
+.staff-audio-button:focus-visible {
+  filter: brightness(1.12);
+  outline: none;
+  transform: translateY(-2px);
 }
 
 .team-control-row {
