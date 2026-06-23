@@ -15,6 +15,7 @@ import {
   remove,
   serverTimestamp as databaseServerTimestamp,
   set,
+  update,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -95,6 +96,11 @@ const STEP_LOGS = Object.freeze({
   "6-1": ["Log_17.png", "Log_18.png"],
 });
 const PRESENCE_ROOT = "control/presence";
+const GAME_STATE_PATH = "control/game";
+const PRESENCE_HEARTBEAT_INTERVAL_MS = 5000;
+const PRESENCE_RETRY_DELAY_MS = 3000;
+const PRESENCE_STALE_AFTER_MS = 20000;
+const STAFF_PRESENCE_CHECK_INTERVAL_MS = 5000;
 
 const app = initializeApp(firebaseConfig);
 const firestore = getFirestore(app);
@@ -106,6 +112,8 @@ const clientId = getClientId();
 let route = readRoute();
 let rtdbConnected = null;
 let activePresence = null;
+let presenceHeartbeatTimer = null;
+let presenceRetryTimer = null;
 let presenceSequence = 0;
 let renderSequence = 0;
 let viewCleanups = [];
@@ -116,6 +124,12 @@ window.addEventListener("resize", resizeStage);
 window.addEventListener("popstate", () => {
   route = readRoute();
   renderRoute();
+});
+window.addEventListener("focus", refreshPresenceNow);
+window.addEventListener("online", refreshPresenceNow);
+window.addEventListener("pageshow", refreshPresenceNow);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refreshPresenceNow();
 });
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && route.mode !== "home") {
@@ -163,6 +177,7 @@ function readRoute() {
   const team = Number(params.get("team"));
 
   if (mode === "staff") return { mode: "staff" };
+  if (mode === "master") return { mode: "master" };
   if (mode === "player" && Number.isInteger(team) && team >= 1 && team <= TEAM_COUNT) {
     return { mode: "player", team };
   }
@@ -175,6 +190,10 @@ function navigate(nextRoute) {
 
   if (nextRoute.mode === "staff") {
     url.searchParams.set("mode", "staff");
+  }
+
+  if (nextRoute.mode === "master") {
+    url.searchParams.set("mode", "master");
   }
 
   if (nextRoute.mode === "player") {
@@ -198,6 +217,8 @@ async function renderRoute() {
 
   if (route.mode === "staff") {
     renderStaff();
+  } else if (route.mode === "master") {
+    renderMaster();
   } else if (route.mode === "player") {
     renderPlayer(route.team);
   } else {
@@ -238,10 +259,7 @@ function renderHome() {
         </div>
         <div class="mode-buttons">
           <button class="mode-button" id="open-staff" type="button">STAFF</button>
-          <button class="mode-button is-disabled" type="button" disabled>
-            MASTER
-            <small>NOT IMPLEMENTED</small>
-          </button>
+          <button class="mode-button" id="open-master" type="button">MASTER</button>
         </div>
       </div>
     </section>
@@ -254,6 +272,9 @@ function renderHome() {
   });
   stage.querySelector("#open-staff").addEventListener("click", () => {
     navigate({ mode: "staff" });
+  });
+  stage.querySelector("#open-master").addEventListener("click", () => {
+    navigate({ mode: "master" });
   });
 }
 
@@ -288,6 +309,8 @@ function renderStaff() {
 
   const state = {
     activeTeams: [],
+    presenceByTeam: {},
+    serverTimeOffset: null,
     steps: new Map(),
     pendingTeams: new Set(),
   };
@@ -295,16 +318,28 @@ function renderStaff() {
   const unsubscribePresence = onValue(
     databaseRef(realtimeDatabase, `${PRESENCE_ROOT}/players`),
     (snapshot) => {
-      const value = snapshot.val() ?? {};
-      state.activeTeams = Object.entries(value)
-        .filter(([, connections]) => connections && Object.keys(connections).length > 0)
-        .map(([teamKey]) => Number(teamKey.replace("team-", "")))
-        .filter((team) => Number.isInteger(team) && team >= 1 && team <= TEAM_COUNT)
-        .sort((a, b) => a - b);
-
-      updateStaffView(state);
+      state.presenceByTeam = snapshot.val() ?? {};
+      refreshStaffPresence(state);
     },
     (error) => showToast(`プレイヤー接続一覧を取得できません: ${error.message}`),
+  );
+
+  const unsubscribeServerTimeOffset = onValue(
+    databaseRef(realtimeDatabase, ".info/serverTimeOffset"),
+    (snapshot) => {
+      const offset = snapshot.val();
+      state.serverTimeOffset =
+        typeof offset === "number" && Number.isFinite(offset) ? offset : null;
+      refreshStaffPresence(state);
+    },
+    () => {
+      state.serverTimeOffset = null;
+    },
+  );
+
+  const presenceCheckTimer = window.setInterval(
+    () => refreshStaffPresence(state),
+    STAFF_PRESENCE_CHECK_INTERVAL_MS,
   );
 
   const unsubscribeTeams = onSnapshot(
@@ -325,8 +360,255 @@ function renderStaff() {
     (error) => showToast(`FirestoreのSTEP監視に失敗しました: ${error.message}`),
   );
 
-  viewCleanups.push(unsubscribePresence, unsubscribeTeams);
+  viewCleanups.push(
+    unsubscribePresence,
+    unsubscribeServerTimeOffset,
+    unsubscribeTeams,
+    () => window.clearInterval(presenceCheckTimer),
+  );
   updateStaffView(state);
+}
+
+function renderMaster() {
+  stage.innerHTML = `
+    <section class="screen master-screen">
+      <header class="staff-topbar">
+        <div class="staff-brand">
+          <button class="nav-button" id="master-home" type="button">← HOME</button>
+          <h1>MASTER CONTROL</h1>
+          <p class="eyebrow">GAME SYSTEM OVERVIEW</p>
+        </div>
+        <div class="staff-topbar-actions">${connectionBadgeMarkup()}</div>
+      </header>
+
+      <div class="master-layout">
+        <section class="master-team-panel" aria-labelledby="master-team-title">
+          <div class="master-section-heading">
+            <div>
+              <p class="eyebrow">PLAYER TERMINALS</p>
+              <h2 id="master-team-title">TEAM STATUS</h2>
+            </div>
+            <div class="master-online-count" id="master-online-count">0 / ${TEAM_COUNT} ONLINE</div>
+          </div>
+          <div class="master-team-grid" id="master-team-grid"></div>
+        </section>
+
+        <aside class="master-game-panel" aria-labelledby="master-game-title">
+          <p class="eyebrow">GLOBAL CONTROL</p>
+          <h2 id="master-game-title">GAME</h2>
+          <div class="master-game-status" id="master-game-status" data-status="idle">
+            <span>CURRENT STATUS</span>
+            <strong>STANDBY</strong>
+          </div>
+          <p class="master-game-description" id="master-game-description">
+            ゲーム開始待機中です
+          </p>
+          <div class="master-game-actions">
+            <button class="master-game-button is-start" id="game-start" type="button">
+              ゲーム開始
+            </button>
+            <button class="master-game-button is-end" id="game-end" type="button">
+              ゲーム終了
+            </button>
+          </div>
+          <p class="master-game-note">
+            終了すると、全プレイヤー画面の手前に終了画像を表示します。
+          </p>
+        </aside>
+      </div>
+    </section>
+  `;
+
+  stage.querySelector("#master-home").addEventListener("click", () => navigate({ mode: "home" }));
+
+  const state = {
+    activeTeams: [],
+    presenceByTeam: {},
+    serverTimeOffset: null,
+    steps: new Map(),
+    gameStatus: "idle",
+    pendingGameStatus: false,
+  };
+
+  const unsubscribePresence = onValue(
+    databaseRef(realtimeDatabase, `${PRESENCE_ROOT}/players`),
+    (snapshot) => {
+      state.presenceByTeam = snapshot.val() ?? {};
+      refreshMasterPresence(state);
+    },
+    (error) => showToast(`プレイヤー接続一覧を取得できません: ${error.message}`),
+  );
+
+  const unsubscribeServerTimeOffset = onValue(
+    databaseRef(realtimeDatabase, ".info/serverTimeOffset"),
+    (snapshot) => {
+      const offset = snapshot.val();
+      state.serverTimeOffset =
+        typeof offset === "number" && Number.isFinite(offset) ? offset : null;
+      refreshMasterPresence(state);
+    },
+    () => {
+      state.serverTimeOffset = null;
+    },
+  );
+
+  const presenceCheckTimer = window.setInterval(
+    () => refreshMasterPresence(state),
+    STAFF_PRESENCE_CHECK_INTERVAL_MS,
+  );
+
+  const unsubscribeTeams = onSnapshot(
+    collection(firestore, "teams"),
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        const team = Number(change.doc.id.replace("team-", ""));
+        if (!Number.isInteger(team)) return;
+
+        if (change.type === "removed") {
+          state.steps.delete(team);
+        } else {
+          state.steps.set(team, normalizeStep(change.doc.data().step));
+        }
+      });
+      updateMasterView(state);
+    },
+    (error) => showToast(`FirestoreのSTEP監視に失敗しました: ${error.message}`),
+  );
+
+  const unsubscribeGame = onValue(
+    databaseRef(realtimeDatabase, GAME_STATE_PATH),
+    (snapshot) => {
+      state.gameStatus = normalizeGameStatus(snapshot.val()?.status);
+      updateMasterView(state);
+    },
+    (error) => showToast(`ゲーム状態を取得できません: ${error.message}`),
+  );
+
+  stage.querySelector("#game-start").addEventListener("click", () => {
+    changeGameStatus(state, "running");
+  });
+  stage.querySelector("#game-end").addEventListener("click", () => {
+    changeGameStatus(state, "ended");
+  });
+
+  viewCleanups.push(
+    unsubscribePresence,
+    unsubscribeServerTimeOffset,
+    unsubscribeTeams,
+    unsubscribeGame,
+    () => window.clearInterval(presenceCheckTimer),
+  );
+  updateMasterView(state);
+}
+
+function refreshStaffPresence(state) {
+  state.activeTeams = getActiveTeams(state.presenceByTeam, state.serverTimeOffset);
+  updateStaffView(state);
+}
+
+function refreshMasterPresence(state) {
+  state.activeTeams = getActiveTeams(state.presenceByTeam, state.serverTimeOffset);
+  updateMasterView(state);
+}
+
+function getActiveTeams(presenceByTeam, serverTimeOffset) {
+  const serverNow =
+    serverTimeOffset === null ? null : Date.now() + serverTimeOffset;
+
+  return Object.entries(presenceByTeam)
+    .filter(([, connections]) => hasLivePlayerConnection(connections, serverNow))
+    .map(([teamKey]) => Number(teamKey.replace("team-", "")))
+    .filter((team) => Number.isInteger(team) && team >= 1 && team <= TEAM_COUNT)
+    .sort((a, b) => a - b);
+}
+
+function hasLivePlayerConnection(connections, serverNow) {
+  if (!connections || typeof connections !== "object") return false;
+
+  return Object.values(connections).some((connection) => {
+    if (!connection || connection.online !== true) return false;
+
+    const lastSeenAt = connection.lastSeenAt;
+    if (
+      serverNow === null ||
+      typeof lastSeenAt !== "number" ||
+      !Number.isFinite(lastSeenAt)
+    ) {
+      return true;
+    }
+
+    return serverNow - lastSeenAt <= PRESENCE_STALE_AFTER_MS;
+  });
+}
+
+function updateMasterView(state) {
+  const teamGrid = stage.querySelector("#master-team-grid");
+  if (!teamGrid) return;
+
+  teamGrid.innerHTML = Array.from({ length: TEAM_COUNT }, (_, index) => {
+    const team = index + 1;
+    const isOnline = state.activeTeams.includes(team);
+    const step = state.steps.get(team) ?? 1;
+
+    return `
+      <article class="master-team-card ${isOnline ? "is-online" : "is-offline"}">
+        <div class="master-team-number">${formatNumber(team)}</div>
+        <div class="master-team-detail">
+          <span>TEAM ${formatNumber(team)}</span>
+          <strong>${isOnline ? "接続中" : "未接続"}</strong>
+        </div>
+        <div class="master-team-step">
+          <span>STEP</span>
+          <strong>${isOnline ? getStepLabel(step) : "—"}</strong>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  const onlineCount = stage.querySelector("#master-online-count");
+  if (onlineCount) {
+    onlineCount.textContent = `${state.activeTeams.length} / ${TEAM_COUNT} ONLINE`;
+  }
+
+  const status = normalizeGameStatus(state.gameStatus);
+  const statusElement = stage.querySelector("#master-game-status");
+  const description = stage.querySelector("#master-game-description");
+  const startButton = stage.querySelector("#game-start");
+  const endButton = stage.querySelector("#game-end");
+  if (!statusElement || !description || !startButton || !endButton) return;
+
+  const statusContent = {
+    idle: { label: "STANDBY", description: "ゲーム開始待機中です" },
+    running: { label: "RUNNING", description: "ゲーム進行中です" },
+    ended: { label: "ENDED", description: "全プレイヤー画面に終了画像を表示中です" },
+  }[status];
+
+  statusElement.dataset.status = status;
+  statusElement.querySelector("strong").textContent = statusContent.label;
+  description.textContent = statusContent.description;
+  startButton.disabled = state.pendingGameStatus || status === "running";
+  endButton.disabled = state.pendingGameStatus || status === "ended";
+}
+
+async function changeGameStatus(state, status) {
+  const nextStatus = normalizeGameStatus(status);
+  if (state.pendingGameStatus || nextStatus === "idle") return;
+
+  state.pendingGameStatus = true;
+  updateMasterView(state);
+
+  try {
+    await update(databaseRef(realtimeDatabase, GAME_STATE_PATH), {
+      status: nextStatus,
+      updatedAt: databaseServerTimestamp(),
+      updatedBy: clientId,
+    });
+  } catch (error) {
+    showToast(`ゲーム状態を更新できません: ${error.message}`);
+  } finally {
+    state.pendingGameStatus = false;
+    updateMasterView(state);
+  }
 }
 
 function updateStaffView(state) {
@@ -480,6 +762,13 @@ function renderPlayer(team) {
         type="button"
         aria-label="MAPを開く"
       ></button>
+      <img
+        class="player-game-end-overlay"
+        src="./hutae.webp"
+        alt="ゲーム終了"
+        data-game-end-overlay
+        hidden
+      />
       <button
         class="hidden-staff-trigger"
         id="hidden-staff-trigger"
@@ -504,6 +793,7 @@ function renderPlayer(team) {
 
   const cameraControls = setupPlayerCameraControls();
   setupHiddenStaffMenu();
+  const gameEndOverlay = stage.querySelector("[data-game-end-overlay]");
 
   const teamDocument = doc(firestore, "teams", teamDocumentId(team));
   runTransaction(firestore, async (transaction) => {
@@ -528,7 +818,15 @@ function renderPlayer(team) {
     (error) => showToast(`STEPを受信できません: ${error.message}`),
   );
 
-  viewCleanups.push(unsubscribe);
+  const unsubscribeGame = onValue(
+    databaseRef(realtimeDatabase, GAME_STATE_PATH),
+    (snapshot) => {
+      gameEndOverlay.hidden = normalizeGameStatus(snapshot.val()?.status) !== "ended";
+    },
+    (error) => showToast(`ゲーム状態を受信できません: ${error.message}`),
+  );
+
+  viewCleanups.push(unsubscribe, unsubscribeGame);
 }
 
 function setupPlayerCameraControls() {
@@ -772,6 +1070,10 @@ function normalizeStep(value) {
   return Math.min(STEP_COUNT, Math.max(1, Math.round(step)));
 }
 
+function normalizeGameStatus(value) {
+  return value === "running" || value === "ended" ? value : "idle";
+}
+
 function getStepLabel(step) {
   return STEP_LABELS[normalizeStep(step) - 1];
 }
@@ -835,7 +1137,7 @@ function updateConnectionBadges() {
   });
 }
 
-async function registerPresence() {
+async function registerPresence(reportError = true) {
   if (!rtdbConnected || route.mode === "home") return;
 
   const sequence = ++presenceSequence;
@@ -845,9 +1147,16 @@ async function registerPresence() {
   const path =
     route.mode === "player"
       ? `${PRESENCE_ROOT}/players/${teamDocumentId(route.team)}/${clientId}`
-      : `${PRESENCE_ROOT}/staff/${clientId}`;
+      : `${PRESENCE_ROOT}/${route.mode}/${clientId}`;
   const presenceRef = databaseRef(realtimeDatabase, path);
   const disconnectOperation = onDisconnect(presenceRef);
+  const presence = {
+    ref: presenceRef,
+    disconnectOperation,
+    mode: route.mode,
+    team: route.mode === "player" ? route.team : null,
+    clientId,
+  };
 
   try {
     await disconnectOperation.remove();
@@ -858,10 +1167,11 @@ async function registerPresence() {
 
     await set(presenceRef, {
       online: true,
-      mode: route.mode,
-      team: route.mode === "player" ? route.team : null,
+      mode: presence.mode,
+      team: presence.team,
       clientId,
       connectedAt: databaseServerTimestamp(),
+      lastSeenAt: databaseServerTimestamp(),
     });
 
     if (sequence !== presenceSequence) {
@@ -870,14 +1180,26 @@ async function registerPresence() {
       return;
     }
 
-    activePresence = { ref: presenceRef, disconnectOperation };
+    activePresence = presence;
+    schedulePresenceHeartbeat(presence, sequence);
   } catch (error) {
-    showToast(`RTDB presenceの登録に失敗しました: ${error.message}`);
+    try {
+      await disconnectOperation.cancel();
+    } catch {
+      // 接続が切れている場合は、再接続後の再登録に任せます。
+    }
+
+    if (sequence === presenceSequence && rtdbConnected && route.mode !== "home") {
+      if (reportError) showToast(`RTDB presenceの登録に失敗しました: ${error.message}`);
+      schedulePresenceRetry(sequence);
+    }
   }
 }
 
 async function clearPresence(invalidateSequence = true) {
   if (invalidateSequence) presenceSequence += 1;
+  stopPresenceHeartbeat();
+  stopPresenceRetry();
   const currentPresence = activePresence;
   activePresence = null;
   if (!currentPresence) return;
@@ -887,6 +1209,82 @@ async function clearPresence(invalidateSequence = true) {
     await remove(currentPresence.ref);
   } catch {
     // オフライン時は、登録済みのonDisconnectがサーバー側で削除を処理します。
+  }
+}
+
+function refreshPresenceNow() {
+  if (!rtdbConnected || route.mode === "home") return;
+
+  const currentPresence = activePresence;
+  if (!currentPresence) {
+    registerPresence();
+    return;
+  }
+
+  writePresenceHeartbeat(currentPresence, presenceSequence);
+}
+
+function schedulePresenceHeartbeat(presence, sequence) {
+  stopPresenceHeartbeat();
+  presenceHeartbeatTimer = window.setTimeout(async () => {
+    presenceHeartbeatTimer = null;
+    await writePresenceHeartbeat(presence, sequence);
+
+    if (
+      sequence === presenceSequence &&
+      activePresence === presence &&
+      rtdbConnected &&
+      route.mode !== "home"
+    ) {
+      schedulePresenceHeartbeat(presence, sequence);
+    }
+  }, PRESENCE_HEARTBEAT_INTERVAL_MS);
+}
+
+function stopPresenceHeartbeat() {
+  window.clearTimeout(presenceHeartbeatTimer);
+  presenceHeartbeatTimer = null;
+}
+
+function schedulePresenceRetry(sequence) {
+  stopPresenceRetry();
+  presenceRetryTimer = window.setTimeout(() => {
+    presenceRetryTimer = null;
+    if (sequence === presenceSequence && rtdbConnected && route.mode !== "home") {
+      registerPresence(false);
+    }
+  }, PRESENCE_RETRY_DELAY_MS);
+}
+
+function stopPresenceRetry() {
+  window.clearTimeout(presenceRetryTimer);
+  presenceRetryTimer = null;
+}
+
+async function writePresenceHeartbeat(presence, sequence) {
+  if (
+    sequence !== presenceSequence ||
+    activePresence !== presence ||
+    !rtdbConnected ||
+    route.mode === "home"
+  ) {
+    return;
+  }
+
+  try {
+    await update(presence.ref, {
+      online: true,
+      mode: presence.mode,
+      team: presence.team,
+      clientId: presence.clientId,
+      lastSeenAt: databaseServerTimestamp(),
+    });
+  } catch (error) {
+    if (sequence === presenceSequence && activePresence === presence && rtdbConnected) {
+      stopPresenceHeartbeat();
+      showToast(`RTDB presenceの更新に失敗しました: ${error.message}`);
+      schedulePresenceRetry(sequence);
+    }
   }
 }
 

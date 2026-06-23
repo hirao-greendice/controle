@@ -463,6 +463,251 @@ button {
   cursor: not-allowed;
 }
 
+.master-screen {
+  padding: 48px 58px;
+}
+
+.master-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 30px;
+  height: 1012px;
+  margin-top: 27px;
+}
+
+.master-team-panel,
+.master-game-panel {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    rgba(2, 4, 6, 0.72);
+  background-size: 40px 40px;
+  border: 1px solid #242b32;
+}
+
+.master-team-panel {
+  min-width: 0;
+  padding: 32px;
+}
+
+.master-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 76px;
+  margin-bottom: 24px;
+}
+
+.master-section-heading h2,
+.master-game-panel h2 {
+  margin: 10px 0 0;
+  font-family: "Arial Narrow", sans-serif;
+  font-size: 42px;
+  font-weight: 300;
+  letter-spacing: 0.13em;
+}
+
+.master-online-count {
+  padding: 13px 17px;
+  color: #9ca6af;
+  background: #11161a;
+  border: 1px solid #303840;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.master-team-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(5, 1fr);
+  gap: 18px;
+  height: 848px;
+}
+
+.master-team-card {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr) 125px;
+  align-items: stretch;
+  min-width: 0;
+  overflow: hidden;
+  background: #151a1f;
+  border: 1px solid #303840;
+}
+
+.master-team-card.is-online {
+  background: linear-gradient(90deg, rgba(143, 208, 24, 0.18), #151a1f 45%);
+  border-color: rgba(166, 236, 41, 0.55);
+  box-shadow: inset 4px 0 0 var(--green-bright);
+}
+
+.master-team-number {
+  display: grid;
+  place-items: center;
+  color: #626c75;
+  background: rgba(0, 0, 0, 0.26);
+  border-right: 1px solid #303840;
+  font-family: "Arial Narrow", sans-serif;
+  font-size: 58px;
+  font-weight: 300;
+}
+
+.master-team-card.is-online .master-team-number {
+  color: #081006;
+  background: var(--green-bright);
+  border-right-color: rgba(255, 255, 255, 0.34);
+}
+
+.master-team-detail,
+.master-team-step {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.master-team-detail {
+  min-width: 0;
+  padding: 0 22px;
+}
+
+.master-team-step {
+  align-items: center;
+  border-left: 1px solid #303840;
+}
+
+.master-team-detail span,
+.master-team-step span {
+  color: #707b85;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.master-team-detail strong {
+  margin-top: 9px;
+  color: #77818a;
+  font-size: 23px;
+  letter-spacing: 0.08em;
+}
+
+.master-team-card.is-online .master-team-detail strong {
+  color: var(--green-bright);
+}
+
+.master-team-step strong {
+  margin-top: 8px;
+  color: #68727b;
+  font-family: "Arial Narrow", sans-serif;
+  font-size: 30px;
+  font-weight: 300;
+}
+
+.master-team-card.is-online .master-team-step strong {
+  color: #fff;
+}
+
+.master-game-panel {
+  padding: 42px 36px;
+}
+
+.master-game-status {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 218px;
+  margin-top: 52px;
+  padding: 0 30px;
+  background: #151a1f;
+  border: 1px solid #353e46;
+  box-shadow: inset 6px 0 0 #69747e;
+}
+
+.master-game-status[data-status="running"] {
+  background: rgba(35, 68, 28, 0.52);
+  border-color: rgba(103, 223, 139, 0.58);
+  box-shadow: inset 6px 0 0 var(--online);
+}
+
+.master-game-status[data-status="ended"] {
+  background: rgba(92, 25, 33, 0.58);
+  border-color: rgba(255, 101, 113, 0.65);
+  box-shadow: inset 6px 0 0 var(--offline);
+}
+
+.master-game-status span {
+  color: #89939c;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.master-game-status strong {
+  margin-top: 18px;
+  font-family: "Arial Narrow", sans-serif;
+  font-size: 56px;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+}
+
+.master-game-description {
+  min-height: 58px;
+  margin: 24px 0 34px;
+  color: #aab2b9;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.master-game-actions {
+  display: grid;
+  gap: 22px;
+}
+
+.master-game-button {
+  height: 118px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  transition:
+    filter 120ms ease,
+    transform 120ms ease;
+}
+
+.master-game-button.is-start {
+  color: #071006;
+  background: var(--green-bright);
+  border-color: #c6ff61;
+}
+
+.master-game-button.is-end {
+  color: #fff;
+  background: #b42f3d;
+  border-color: #ef6572;
+}
+
+.master-game-button:hover:not(:disabled),
+.master-game-button:focus-visible:not(:disabled) {
+  filter: brightness(1.12);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.master-game-button:disabled {
+  color: #65707a;
+  background: #20252a;
+  border-color: #303840;
+  cursor: not-allowed;
+}
+
+.master-game-note {
+  margin: 34px 0 0;
+  color: #747e87;
+  font-size: 16px;
+  line-height: 1.75;
+}
+
 .player-screen {
   background-color: #000;
 }
@@ -622,7 +867,7 @@ button {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 100;
+  z-index: 120;
   width: 360px;
   height: 190px;
   padding: 0;
@@ -630,6 +875,24 @@ button {
   border: 0;
   cursor: default;
   -webkit-tap-highlight-color: transparent;
+}
+
+.player-game-end-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  display: block;
+  width: 1921px;
+  height: 1201px;
+  max-width: none;
+  object-fit: fill;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.player-game-end-overlay[hidden] {
+  display: none;
 }
 
 .hidden-staff-trigger:focus {
@@ -794,7 +1057,7 @@ button {
   position: absolute;
   left: 50%;
   bottom: 42px;
-  z-index: 20;
+  z-index: 115;
   max-width: 900px;
   padding: 18px 26px;
   color: #fff;
@@ -808,7 +1071,7 @@ button {
 .staff-popup-backdrop {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  z-index: 110;
   display: grid;
   place-items: center;
   background: rgba(0, 0, 0, 0.82);

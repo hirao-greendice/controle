@@ -6,6 +6,11 @@
       "presence": {
         ".read": true,
         ".write": true
+      },
+      "game": {
+        ".read": true,
+        ".write": true,
+        ".validate": "newData.hasChildren(['status', 'updatedAt', 'updatedBy']) && (newData.child('status').val() === 'running' || newData.child('status').val() === 'ended') && newData.child('updatedAt').isNumber() && newData.child('updatedBy').isString()"
       }
     }
   }
