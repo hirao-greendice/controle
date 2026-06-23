@@ -1071,7 +1071,7 @@ function renderPlayer(team) {
       ></button>
       <img
         class="player-game-end-overlay"
-        src="./hutae.webp"
+        src="./hutae.png"
         alt="ゲーム終了"
         data-game-end-overlay
         hidden

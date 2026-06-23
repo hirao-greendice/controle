@@ -942,7 +942,12 @@ button {
   top: 262px;
   left: 1200px;
   z-index: 1;
-  width: 681px;
+  /*
+   * iPad/Safari draws its native scroll indicator even when scrollbar CSS
+   * requests that it be hidden. Keep the 681px log content in place, but move
+   * the native indicator beyond the 1920px stage where it is clipped.
+   */
+  width: 760px;
   height: 829px;
   overflow-x: hidden;
   overflow-y: auto;
