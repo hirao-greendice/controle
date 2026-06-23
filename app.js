@@ -594,7 +594,7 @@ function updateMasterView(state) {
       <article class="master-team-card ${isOnline ? "is-online" : "is-offline"}">
         <div class="master-team-number">${formatNumber(team)}</div>
         <div class="master-team-detail">
-          <span>TEAM ${formatNumber(team)}</span>
+          <span>CONNECTION</span>
           <strong>${isOnline ? "接続中" : "未接続"}</strong>
         </div>
         <div class="master-team-step">

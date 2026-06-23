@@ -519,16 +519,16 @@ button {
 
 .master-team-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(5, 1fr);
-  grid-auto-flow: column;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(2, 1fr);
   gap: 18px;
   height: 848px;
 }
 
 .master-team-card {
   display: grid;
-  grid-template-columns: 118px minmax(0, 1fr) 125px;
+  grid-template-columns: 1fr;
+  grid-template-rows: 120px minmax(0, 1fr) 96px;
   align-items: stretch;
   min-width: 0;
   overflow: hidden;
@@ -537,9 +537,9 @@ button {
 }
 
 .master-team-card.is-online {
-  background: linear-gradient(90deg, rgba(143, 208, 24, 0.18), #151a1f 45%);
+  background: linear-gradient(180deg, rgba(143, 208, 24, 0.16), #151a1f 45%);
   border-color: rgba(166, 236, 41, 0.55);
-  box-shadow: inset 4px 0 0 var(--green-bright);
+  box-shadow: inset 0 4px 0 var(--green-bright);
 }
 
 .master-team-number {
@@ -547,16 +547,17 @@ button {
   place-items: center;
   color: #626c75;
   background: rgba(0, 0, 0, 0.26);
-  border-right: 1px solid #303840;
+  border-bottom: 1px solid #303840;
   font-family: "Arial Narrow", sans-serif;
-  font-size: 58px;
+  font-size: 66px;
   font-weight: 300;
+  letter-spacing: 0.04em;
 }
 
 .master-team-card.is-online .master-team-number {
   color: #081006;
   background: var(--green-bright);
-  border-right-color: rgba(255, 255, 255, 0.34);
+  border-bottom-color: rgba(255, 255, 255, 0.34);
 }
 
 .master-team-detail,
@@ -567,27 +568,32 @@ button {
 }
 
 .master-team-detail {
+  align-items: center;
   min-width: 0;
-  padding: 0 22px;
+  padding: 24px 16px;
+  text-align: center;
 }
 
 .master-team-step {
+  flex-direction: row;
   align-items: center;
-  border-left: 1px solid #303840;
+  justify-content: space-between;
+  padding: 0 22px;
+  border-top: 1px solid #303840;
 }
 
 .master-team-detail span,
 .master-team-step span {
   color: #707b85;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.14em;
 }
 
 .master-team-detail strong {
-  margin-top: 9px;
+  margin-top: 16px;
   color: #77818a;
-  font-size: 23px;
+  font-size: 27px;
   letter-spacing: 0.08em;
 }
 
@@ -596,10 +602,10 @@ button {
 }
 
 .master-team-step strong {
-  margin-top: 8px;
+  margin-top: 0;
   color: #68727b;
   font-family: "Arial Narrow", sans-serif;
-  font-size: 30px;
+  font-size: 34px;
   font-weight: 300;
 }
 
