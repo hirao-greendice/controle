@@ -42,6 +42,17 @@ const STEP_LABELS = Object.freeze([
   "6-1",
 ]);
 const STEP_COUNT = STEP_LABELS.length;
+const STEP_NOTES = Object.freeze({
+  "1-1": "懐中時計",
+  "2-1": "フラミンゴ",
+  "2-2": "白鳥",
+  "3-1": "？？？",
+  "3-2": "？？？",
+  "4-1": "マイナスドライバー",
+  "4-2": "マドラー",
+  "5-1": "鉛筆入れる",
+  "6-1": "",
+});
 const CAMERA_COUNT = 9;
 const CAMERA_FRAME_STEPS = Object.freeze({
   1: STEP_LABELS,
@@ -596,6 +607,10 @@ function updateMasterView(state) {
         <div class="master-team-detail">
           <span>CONNECTION</span>
           <strong>${isOnline ? "接続中" : "未接続"}</strong>
+          <div class="master-team-note">
+            <span>INFO</span>
+            <b>${isOnline ? getStepNote(step) || "—" : "—"}</b>
+          </div>
         </div>
         <div class="master-team-step">
           <span>STEP</span>
@@ -722,6 +737,9 @@ function updateStaffView(state) {
             <span class="step-team">TEAM ${formatNumber(team)}</span>
             <span class="step-value">
               ${isOnline ? `STEP ${getStepLabel(step)} / ${STEP_LABELS.at(-1)}` : "接続無し"}
+            </span>
+            <span class="step-note">
+              ${isOnline ? getStepNote(step) || "—" : "—"}
             </span>
           </div>
           <button
@@ -1154,6 +1172,10 @@ function normalizeGameStatus(value) {
 
 function getStepLabel(step) {
   return STEP_LABELS[normalizeStep(step) - 1];
+}
+
+function getStepNote(step) {
+  return STEP_NOTES[getStepLabel(step)] ?? "";
 }
 
 function getCameraFrameStep(cameraNumber, step) {
