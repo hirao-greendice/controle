@@ -2122,7 +2122,7 @@ function setupPlayerCameraControls() {
 
     logScrollbar.hidden = false;
     const thumbHeight = Math.max(
-      36,
+      52,
       Math.round(
         logScrollbar.clientHeight *
           (logViewport.clientHeight / logViewport.scrollHeight),

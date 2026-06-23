@@ -1381,11 +1381,11 @@ button {
 
 .player-log-scrollbar {
   position: absolute;
-  top: 262px;
-  left: 1884px;
+  top: 274px;
+  left: 1871px;
   z-index: 4;
-  width: 6px;
-  height: 829px;
+  width: 8px;
+  height: 805px;
   pointer-events: none;
 }
 
@@ -1394,10 +1394,15 @@ button {
 }
 
 .player-log-scrollbar-thumb {
-  width: 6px;
-  height: 36px;
-  background: #bd2028;
+  width: 8px;
+  min-height: 52px;
+  background: #ef3340;
+  border-radius: 999px;
+  box-shadow: 0 0 10px rgba(239, 51, 64, 0.34);
   transform: translateY(0);
+  transition:
+    height 100ms ease-out,
+    transform 50ms linear;
 }
 
 .player-log-list {
