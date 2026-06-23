@@ -13,7 +13,18 @@ service cloud.firestore {
         request.resource.data.step >= 1 &&
         request.resource.data.step <= 9 &&
         (!('visitedStep32' in request.resource.data) ||
-          request.resource.data.visitedStep32 is bool);
+          request.resource.data.visitedStep32 is bool) &&
+        (!('deskTaskStatus' in request.resource.data) ||
+          (
+            (request.resource.data.deskTaskStatus == 'pending' ||
+              request.resource.data.deskTaskStatus == 'done') &&
+            request.resource.data.deskTaskStep is int &&
+            request.resource.data.deskTaskStep >= 1 &&
+            request.resource.data.deskTaskStep <= 9 &&
+            request.resource.data.deskTaskRevision is int &&
+            request.resource.data.deskTaskRevision >= 1 &&
+            request.resource.data.deskTaskRequestedBy is string
+          ));
     }
   }
 }

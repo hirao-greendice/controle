@@ -6,11 +6,13 @@ Databaseを使います。
 
 ## 画面
 
-- ホーム: チーム1〜10、スタッフ画面、マスター画面を選択
+- ホーム: チーム1〜10、スタッフ画面、マスター画面、巨人スタッフ画面を選択
 - プレイヤー: `1-1.jpg`を背景に表示し、上部8ボタンとFirestore同期のSTEP番号を重ねる
 - スタッフ: チーム1〜10の操作行を常時表示し、未接続の行には「接続無し」と表示
 - マスター: 10チームの接続・STEP状況を表示し、ゲーム開始・終了を全端末へ送信
+- 巨人スタッフ: 各チームの机上作業依頼を表示し、OK操作でスタッフ画面へ完了を返す
 - スタッフ・マスター: 各チームの現在STEPに対応する補足情報を表示
+- スタッフでSTEPを進めると巨人スタッフへ机上作業を依頼し、OK後はスタッフに完了表示
 - ゲーム終了時: 全プレイヤー画面に`hutae.png`を表示
 - プレイヤー: 右上の透明領域を5回連続タップするとスタッフメニューを表示
 - プレイヤー: スタッフメニューの「STEP移動」から、通信停止中でも端末単体でSTEPを変更
@@ -19,6 +21,7 @@ Databaseを使います。
 
 - スタッフ: `/?mode=staff`
 - マスター: `/?mode=master`
+- 巨人スタッフ: `/?mode=giant`
 - チーム3のプレイヤー: `/?mode=player&team=3`
 
 ## ローカル起動
@@ -59,6 +62,13 @@ teams/team-01
   teamNumber: 1
   step: 1
   visitedStep32: true | false
+  deskTaskStatus: pending | done
+  deskTaskStep: 1
+  deskTaskRevision: 1
+  deskTaskRequestedAt: server timestamp
+  deskTaskRequestedBy: client id
+  deskTaskCompletedAt: server timestamp
+  deskTaskCompletedBy: client id
   updatedAt: server timestamp
   updatedBy: client id
 ```

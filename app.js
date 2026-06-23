@@ -223,6 +223,7 @@ function readRoute() {
 
   if (mode === "staff") return { mode: "staff" };
   if (mode === "master") return { mode: "master" };
+  if (mode === "giant") return { mode: "giant" };
   if (mode === "player" && Number.isInteger(team) && team >= 1 && team <= TEAM_COUNT) {
     return { mode: "player", team };
   }
@@ -282,6 +283,10 @@ function navigate(nextRoute) {
     url.searchParams.set("mode", "master");
   }
 
+  if (nextRoute.mode === "giant") {
+    url.searchParams.set("mode", "giant");
+  }
+
   if (nextRoute.mode === "player") {
     url.searchParams.set("mode", "player");
     url.searchParams.set("team", String(nextRoute.team));
@@ -305,6 +310,8 @@ async function renderRoute() {
     renderStaff();
   } else if (route.mode === "master") {
     renderMaster();
+  } else if (route.mode === "giant") {
+    renderGiantStaff();
   } else if (route.mode === "player") {
     renderPlayer(route.team);
   } else {
@@ -346,6 +353,9 @@ function renderHome() {
         <div class="mode-buttons">
           <button class="mode-button" id="open-staff" type="button">STAFF</button>
           <button class="mode-button" id="open-master" type="button">MASTER</button>
+          <button class="mode-button mode-button-giant" id="open-giant" type="button">
+            巨人スタッフ
+          </button>
         </div>
       </div>
     </section>
@@ -361,6 +371,9 @@ function renderHome() {
   });
   stage.querySelector("#open-master").addEventListener("click", () => {
     navigate({ mode: "master" });
+  });
+  stage.querySelector("#open-giant").addEventListener("click", () => {
+    navigate({ mode: "giant" });
   });
 }
 
@@ -399,6 +412,7 @@ function renderStaff() {
     serverTimeOffset: null,
     steps: new Map(),
     visitedStep32ByTeam: new Map(),
+    deskTasks: new Map(),
     pendingTeams: new Set(),
   };
 
@@ -439,10 +453,12 @@ function renderStaff() {
         if (change.type === "removed") {
           state.steps.delete(team);
           state.visitedStep32ByTeam.delete(team);
+          state.deskTasks.delete(team);
         } else {
           const teamData = change.doc.data();
           state.steps.set(team, normalizeStep(teamData.step));
           state.visitedStep32ByTeam.set(team, normalizeVisitedStep32(teamData));
+          state.deskTasks.set(team, normalizeDeskTask(teamData));
         }
       });
       updateStaffView(state);
@@ -625,6 +641,60 @@ function renderMaster() {
   updateMasterView(state);
 }
 
+function renderGiantStaff() {
+  stage.innerHTML = `
+    <section class="screen master-screen giant-screen">
+      <header class="staff-topbar">
+        <div class="staff-brand">
+          <button class="nav-button" id="giant-home" type="button">← HOME</button>
+          <h1>巨人スタッフ CONTROL</h1>
+          <p class="eyebrow">DESK OPERATION BOARD</p>
+        </div>
+        <div class="staff-topbar-actions">${connectionBadgeMarkup()}</div>
+      </header>
+
+      <section class="master-team-panel giant-team-panel" aria-labelledby="giant-team-title">
+        <div class="master-section-heading">
+          <div>
+            <p class="eyebrow">HALL DESK OPERATIONS</p>
+            <h2 id="giant-team-title">机上作業一覧</h2>
+          </div>
+          <div class="master-online-count" id="giant-pending-count">0 TASKS</div>
+        </div>
+        <div class="master-team-grid giant-team-grid" id="giant-team-grid"></div>
+      </section>
+    </section>
+  `;
+
+  stage.querySelector("#giant-home").addEventListener("click", () => navigate({ mode: "home" }));
+
+  const state = {
+    deskTasks: new Map(),
+    pendingTeams: new Set(),
+  };
+
+  const unsubscribeTeams = onSnapshot(
+    collection(firestore, "teams"),
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        const team = Number(change.doc.id.replace("team-", ""));
+        if (!Number.isInteger(team)) return;
+
+        if (change.type === "removed") {
+          state.deskTasks.delete(team);
+        } else {
+          state.deskTasks.set(team, normalizeDeskTask(change.doc.data()));
+        }
+      });
+      updateGiantStaffView(state);
+    },
+    (error) => showToast(`机上作業の監視に失敗しました: ${error.message}`),
+  );
+
+  viewCleanups.push(unsubscribeTeams);
+  updateGiantStaffView(state);
+}
+
 function refreshStaffPresence(state) {
   state.activeTeams = getActiveTeams(state.presenceByTeam, state.serverTimeOffset);
   updateStaffView(state);
@@ -714,6 +784,101 @@ function updateMasterView(state) {
   description.textContent = statusContent.description;
   startButton.disabled = state.pendingGameStatus || status === "running";
   endButton.disabled = state.pendingGameStatus || status === "ended";
+}
+
+function updateGiantStaffView(state) {
+  const teamGrid = stage.querySelector("#giant-team-grid");
+  if (!teamGrid) return;
+
+  teamGrid.innerHTML = Array.from({ length: TEAM_COUNT }, (_, index) => {
+    const team = index + 1;
+    const task = state.deskTasks.get(team) ?? normalizeDeskTask();
+    const isPending = task.status === "pending";
+    const isDone = task.status === "done";
+    const isUpdating = state.pendingTeams.has(team);
+
+    return `
+      <article class="giant-team-card ${isPending ? "is-pending" : ""} ${isDone ? "is-done" : ""}">
+        <div class="giant-team-number">
+          <span>TEAM</span>
+          <strong>${formatNumber(team)}</strong>
+        </div>
+        <div class="giant-team-task">
+          <span>${task.step ? `STEP ${getStepLabel(task.step)}` : "DESK TASK"}</span>
+          <b>${task.step ? getDeskTaskInstruction(task.step) : "依頼待機中"}</b>
+        </div>
+        <div class="giant-team-status">
+          <span>${isPending ? "実行待ち" : isDone ? "完了済み" : "待機中"}</span>
+          ${
+            isPending
+              ? `
+                <button
+                  class="giant-ok-button ${isUpdating ? "loading" : ""}"
+                  type="button"
+                  data-giant-ok-team="${team}"
+                  data-giant-task-revision="${task.revision}"
+                  ${isUpdating ? "disabled" : ""}
+                >OK</button>
+              `
+              : `<strong>${isDone ? "DONE" : "—"}</strong>`
+          }
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  teamGrid.querySelectorAll("[data-giant-ok-team]").forEach((button) => {
+    button.addEventListener("click", () => {
+      completeDeskTask(
+        state,
+        Number(button.dataset.giantOkTeam),
+        Number(button.dataset.giantTaskRevision),
+      );
+    });
+  });
+
+  const pendingCount = [...state.deskTasks.values()].filter(
+    (task) => task.status === "pending",
+  ).length;
+  const countElement = stage.querySelector("#giant-pending-count");
+  if (countElement) {
+    countElement.textContent = `${pendingCount} TASK${pendingCount === 1 ? "" : "S"}`;
+  }
+}
+
+async function completeDeskTask(state, team, revision) {
+  if (state.pendingTeams.has(team)) return;
+
+  state.pendingTeams.add(team);
+  updateGiantStaffView(state);
+
+  try {
+    const teamDocument = doc(firestore, "teams", teamDocumentId(team));
+    await runTransaction(firestore, async (transaction) => {
+      const snapshot = await transaction.get(teamDocument);
+      if (!snapshot.exists()) throw new Error("チームデータが見つかりません");
+
+      const task = normalizeDeskTask(snapshot.data());
+      if (task.status !== "pending" || task.revision !== revision) {
+        throw new Error("依頼内容が更新されました。現在の表示を確認してください");
+      }
+
+      transaction.set(
+        teamDocument,
+        {
+          deskTaskStatus: "done",
+          deskTaskCompletedAt: firestoreServerTimestamp(),
+          deskTaskCompletedBy: clientId,
+        },
+        { merge: true },
+      );
+    });
+  } catch (error) {
+    showToast(`チーム${team}の机上作業を完了できません: ${error.message}`);
+  } finally {
+    state.pendingTeams.delete(team);
+    updateGiantStaffView(state);
+  }
 }
 
 function openGameStatusConfirmation(state, status) {
@@ -815,24 +980,28 @@ function updateStaffView(state) {
       const visitedStep32 =
         state.visitedStep32ByTeam.get(team) ?? step >= STEP_32_INDEX;
       const skippedStep32 = isStep32Skipped(step, visitedStep32);
+      const deskTask = state.deskTasks.get(team) ?? normalizeDeskTask();
       const isRouteChoice = isOnline && step === STEP_31_INDEX;
       const isPending = state.pendingTeams.has(team);
 
       return `
-        <div class="team-control-row ${isOnline ? "is-online" : "is-offline"} ${isRouteChoice ? "has-route-choice" : ""}">
+        <div class="team-control-row ${isOnline ? "is-online" : "is-offline"} ${isRouteChoice ? "has-route-choice" : ""} ${deskTask.status === "pending" ? "has-desk-task" : ""}">
           <div class="step-band ${isOnline ? "" : "is-disconnected"}">
             <span class="step-team">TEAM ${formatNumber(team)}</span>
             <span class="step-value">
               ${isOnline ? `STEP ${getStepLabel(step)} / ${STEP_LABELS.at(-1)}` : "接続無し"}
             </span>
             <span class="step-note ${skippedStep32 ? "is-skip-route" : ""}">
-              ${
-                isOnline
-                  ? skippedStep32
-                    ? `3-2スキップ / ${getStepNote(step) || "—"}`
-                    : getStepNote(step) || "—"
-                  : "—"
-              }
+              <span class="step-note-text">
+                ${
+                  isOnline
+                    ? skippedStep32
+                      ? `3-2スキップ / ${getStepNote(step) || "—"}`
+                      : getStepNote(step) || "—"
+                    : "—"
+                }
+              </span>
+              ${deskTaskStatusMarkup(deskTask)}
             </span>
           </div>
           ${
@@ -994,6 +1163,15 @@ async function changeStep(state, team, delta, routeTarget = null) {
           teamNumber: team,
           step: nextStep,
           visitedStep32: nextVisitedStep32,
+          ...(delta > 0
+            ? {
+                deskTaskStatus: "pending",
+                deskTaskStep: nextStep,
+                deskTaskRevision: normalizeDeskTask(teamData).revision + 1,
+                deskTaskRequestedAt: firestoreServerTimestamp(),
+                deskTaskRequestedBy: clientId,
+              }
+            : {}),
           updatedAt: firestoreServerTimestamp(),
           updatedBy: clientId,
         },
@@ -1665,6 +1843,45 @@ function normalizeVisitedStep32(teamData) {
 
   // Documents created before this branch existed followed the normal 3-2 route.
   return normalizeStep(teamData?.step) >= STEP_32_INDEX;
+}
+
+function normalizeDeskTask(teamData = {}) {
+  const status =
+    teamData?.deskTaskStatus === "pending" || teamData?.deskTaskStatus === "done"
+      ? teamData.deskTaskStatus
+      : "idle";
+  const step = Number(teamData?.deskTaskStep);
+  const revision = Number(teamData?.deskTaskRevision);
+
+  return {
+    status,
+    step:
+      Number.isInteger(step) && step >= 1 && step <= STEP_COUNT
+        ? step
+        : null,
+    revision:
+      Number.isInteger(revision) && revision >= 0
+        ? revision
+        : 0,
+  };
+}
+
+function getDeskTaskInstruction(step) {
+  const label = getStepLabel(step);
+  const note = getStepNote(step);
+  return note ? `${note}の机上作業` : `STEP ${label}の机上作業`;
+}
+
+function deskTaskStatusMarkup(task) {
+  if (task.status === "pending") {
+    return `<span class="desk-task-badge is-pending">机作業 実行中</span>`;
+  }
+
+  if (task.status === "done") {
+    return `<span class="desk-task-badge is-done">机作業 完了</span>`;
+  }
+
+  return "";
 }
 
 function isStep32Skipped(step, visitedStep32) {
