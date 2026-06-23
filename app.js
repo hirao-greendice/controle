@@ -121,15 +121,27 @@ const STEP_POPUPS = Object.freeze({
   "6-1": "Pop_6-1.png",
 });
 const STEP_LOGS = Object.freeze({
-  "1-1": ["Log_01.png", "Log_02.png"],
-  "2-1": ["Log_03.png", "Log_04.png"],
-  "2-2": ["Log_05.png", "Log_06.png"],
-  "3-1": ["Log_07.png", "Log_08.png"],
+  "2-1": ["Log_01.png", "Log_02.png"],
+  "2-2": ["Log_03.png", "Log_04.png"],
+  "3-1": ["Log_05.png", "Log_06.png", "Log_07.png", "Log_08.png"],
   "3-2": ["Log_09.png", "Log_10.png"],
-  "4-1": ["Log_11.png", "Log_12.png"],
-  "4-2": ["Log_13.png", "Log_14.png"],
-  "5-1": ["Log_15.png", "Log_16.png"],
-  "6-1": ["Log_17.png", "Log_18.png"],
+  "5-1": [
+    "Log_11.png",
+    "Log_12.png",
+    "Log_13.png",
+    "Log_14.png",
+    "Log_15.png",
+    "Log_16.png",
+    "Log_17.png",
+    "Log_18.png",
+    "Log_19.png",
+    "Log_20.png",
+    "Log_21.png",
+    "Log_22.png",
+    "Log_23.png",
+    "Log_24.png",
+  ],
+  "6-1": ["Log_25.png", "Log_26.png", "Log_27.png", "Log_28.png"],
 });
 const PRESENCE_ROOT = "control/presence";
 const GAME_STATE_PATH = "control/game";
