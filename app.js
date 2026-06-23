@@ -133,8 +133,11 @@ let toastTimer = null;
 
 resizeStage();
 window.addEventListener("resize", resizeStage);
+document.addEventListener("fullscreenchange", resizeStage);
+document.addEventListener("webkitfullscreenchange", resizeStage);
 window.addEventListener("popstate", () => {
   route = readRoute();
+  if (route.mode === "home") exitFullscreen();
   renderRoute();
 });
 window.addEventListener("focus", refreshPresenceNow);
@@ -202,7 +205,48 @@ function readRoute() {
   return { mode: "home" };
 }
 
+function getFullscreenElement() {
+  return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
+}
+
+function enterFullscreen() {
+  if (getFullscreenElement()) return;
+
+  const root = document.documentElement;
+  const requestFullscreen = root.requestFullscreen ?? root.webkitRequestFullscreen;
+  if (!requestFullscreen) return;
+
+  try {
+    const result = requestFullscreen.call(root);
+    result?.catch?.(() => {
+      // Fullscreen can be rejected when navigation was not triggered by a user action.
+    });
+  } catch {
+    // Keep navigation working on browsers that do not permit fullscreen here.
+  }
+}
+
+function exitFullscreen() {
+  if (!getFullscreenElement()) return;
+
+  const exit = document.exitFullscreen ?? document.webkitExitFullscreen;
+  if (!exit) return;
+
+  try {
+    const result = exit.call(document);
+    result?.catch?.(() => {});
+  } catch {
+    // Keep navigation working even if the browser refuses to exit fullscreen.
+  }
+}
+
 function navigate(nextRoute) {
+  if (nextRoute.mode === "home") {
+    exitFullscreen();
+  } else {
+    enterFullscreen();
+  }
+
   const url = new URL(window.location.href);
   url.search = "";
 
