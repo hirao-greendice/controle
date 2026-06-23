@@ -58,9 +58,15 @@ Firestore:
 teams/team-01
   teamNumber: 1
   step: 1
+  visitedStep32: true | false
   updatedAt: server timestamp
   updatedBy: client id
 ```
+
+スタッフ画面でSTEP 3-1にいる際は、「3-2に進む」と「4-1に進む」を選択します。
+4-1へ直接進む場合は確認画面を表示し、プレイヤー画面の3-2ログだけを非表示にします。
+それ以外のSTEP表示や機能は通常どおり進みます。`visitedStep32`が存在しない既存データは、
+3-2以降なら通常ルートとして扱います。
 
 Realtime Database:
 

@@ -11,7 +11,9 @@ service cloud.firestore {
         request.resource.data.teamNumber <= 10 &&
         request.resource.data.step is int &&
         request.resource.data.step >= 1 &&
-        request.resource.data.step <= 9;
+        request.resource.data.step <= 9 &&
+        (!('visitedStep32' in request.resource.data) ||
+          request.resource.data.visitedStep32 is bool);
     }
   }
 }

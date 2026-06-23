@@ -43,6 +43,9 @@ const STEP_LABELS = Object.freeze([
   "6-1",
 ]);
 const STEP_COUNT = STEP_LABELS.length;
+const STEP_31_INDEX = STEP_LABELS.indexOf("3-1") + 1;
+const STEP_32_INDEX = STEP_LABELS.indexOf("3-2") + 1;
+const STEP_41_INDEX = STEP_LABELS.indexOf("4-1") + 1;
 const STEP_NOTES = Object.freeze({
   "1-1": "懐中時計",
   "2-1": "フラミンゴ",
@@ -147,6 +150,12 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") refreshPresenceNow();
 });
 window.addEventListener("keydown", (event) => {
+  const step32SkipConfirmation = stage.querySelector("#step-32-skip-confirm");
+  if (event.key === "Escape" && step32SkipConfirmation) {
+    step32SkipConfirmation.querySelector('[data-step-skip-confirm="no"]')?.click();
+    return;
+  }
+
   const confirmation = stage.querySelector("#game-confirm:not([hidden])");
   if (event.key === "Escape" && confirmation) {
     confirmation.querySelector('[data-game-confirm="no"]')?.click();
@@ -374,6 +383,7 @@ function renderStaff() {
     presenceByTeam: {},
     serverTimeOffset: null,
     steps: new Map(),
+    visitedStep32ByTeam: new Map(),
     pendingTeams: new Set(),
   };
 
@@ -413,8 +423,11 @@ function renderStaff() {
 
         if (change.type === "removed") {
           state.steps.delete(team);
+          state.visitedStep32ByTeam.delete(team);
         } else {
-          state.steps.set(team, normalizeStep(change.doc.data().step));
+          const teamData = change.doc.data();
+          state.steps.set(team, normalizeStep(teamData.step));
+          state.visitedStep32ByTeam.set(team, normalizeVisitedStep32(teamData));
         }
       });
       updateStaffView(state);
@@ -751,6 +764,18 @@ function updateStaffView(state) {
   const list = stage.querySelector("#active-team-list");
   if (!list) return;
 
+  const skipConfirmation = stage.querySelector("#step-32-skip-confirm");
+  if (skipConfirmation) {
+    const confirmationTeam = Number(skipConfirmation.dataset.team);
+    const confirmationStep = state.steps.get(confirmationTeam) ?? 1;
+    if (
+      !state.activeTeams.includes(confirmationTeam) ||
+      confirmationStep !== STEP_31_INDEX
+    ) {
+      skipConfirmation.remove();
+    }
+  }
+
   list.innerHTML = Array.from({ length: TEAM_COUNT }, (_, index) => {
     const team = index + 1;
     const isOnline = state.activeTeams.includes(team);
@@ -772,33 +797,66 @@ function updateStaffView(state) {
       const team = index + 1;
       const isOnline = state.activeTeams.includes(team);
       const step = state.steps.get(team) ?? 1;
+      const visitedStep32 =
+        state.visitedStep32ByTeam.get(team) ?? step >= STEP_32_INDEX;
+      const skippedStep32 = isStep32Skipped(step, visitedStep32);
+      const isRouteChoice = isOnline && step === STEP_31_INDEX;
       const isPending = state.pendingTeams.has(team);
 
       return `
-        <div class="team-control-row ${isOnline ? "is-online" : "is-offline"}">
+        <div class="team-control-row ${isOnline ? "is-online" : "is-offline"} ${isRouteChoice ? "has-route-choice" : ""}">
           <div class="step-band ${isOnline ? "" : "is-disconnected"}">
             <span class="step-team">TEAM ${formatNumber(team)}</span>
             <span class="step-value">
               ${isOnline ? `STEP ${getStepLabel(step)} / ${STEP_LABELS.at(-1)}` : "接続無し"}
             </span>
-            <span class="step-note">
-              ${isOnline ? getStepNote(step) || "—" : "—"}
+            <span class="step-note ${skippedStep32 ? "is-skip-route" : ""}">
+              ${
+                isOnline
+                  ? skippedStep32
+                    ? `3-2スキップ / ${getStepNote(step) || "—"}`
+                    : getStepNote(step) || "—"
+                  : "—"
+              }
             </span>
           </div>
-          <button
-            class="step-button ${isPending ? "loading" : ""}"
-            type="button"
-            data-step-team="${team}"
-            data-step-delta="1"
-            ${!isOnline || isPending || step >= STEP_COUNT ? "disabled" : ""}
-          >進める</button>
+          ${
+            isRouteChoice
+              ? `
+                <div class="step-route-inline">
+                  <button
+                    class="step-button step-route-button ${isPending ? "loading" : ""}"
+                    type="button"
+                    data-step-route-team="${team}"
+                    data-step-route-target="3-2"
+                    ${isPending ? "disabled" : ""}
+                  >3-2に進む</button>
+                  <button
+                    class="step-button step-route-button is-skip ${isPending ? "loading" : ""}"
+                    type="button"
+                    data-step-route-team="${team}"
+                    data-step-route-target="4-1"
+                    ${isPending ? "disabled" : ""}
+                  >4-1に進む</button>
+                </div>
+              `
+              : `
+                <button
+                  class="step-button ${isPending ? "loading" : ""}"
+                  type="button"
+                  data-step-team="${team}"
+                  data-step-delta="1"
+                  ${!isOnline || isPending || step >= STEP_COUNT ? "disabled" : ""}
+                >進める</button>
+              `
+          }
           <button
             class="step-button ${isPending ? "loading" : ""}"
             type="button"
             data-step-team="${team}"
             data-step-delta="-1"
             ${!isOnline || isPending || step <= 1 ? "disabled" : ""}
-          >戻す</button>
+          >${skippedStep32 && step === STEP_41_INDEX ? "3-1へ戻す" : "戻す"}</button>
         </div>
       `;
     })
@@ -806,12 +864,77 @@ function updateStaffView(state) {
 
   controls.querySelectorAll("[data-step-team]").forEach((button) => {
     button.addEventListener("click", () => {
-      changeStep(state, Number(button.dataset.stepTeam), Number(button.dataset.stepDelta));
+      const team = Number(button.dataset.stepTeam);
+      const delta = Number(button.dataset.stepDelta);
+      changeStep(state, team, delta);
+    });
+  });
+
+  controls.querySelectorAll("[data-step-route-team]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const team = Number(button.dataset.stepRouteTeam);
+      const target = button.dataset.stepRouteTarget;
+
+      if (target === "4-1") {
+        openStep32SkipConfirmation(state, team);
+      } else {
+        changeStep(state, team, 1, "3-2");
+      }
     });
   });
 }
 
-async function changeStep(state, team, delta) {
+function openStep32SkipConfirmation(state, team) {
+  stage.querySelector("#step-32-skip-confirm")?.remove();
+
+  const confirmation = document.createElement("div");
+  confirmation.className = "master-confirm-backdrop";
+  confirmation.id = "step-32-skip-confirm";
+  confirmation.dataset.team = String(team);
+  confirmation.dataset.action = "ended";
+  confirmation.innerHTML = `
+    <section
+      class="master-confirm-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="step-skip-confirm-title"
+      aria-describedby="step-skip-confirm-message"
+    >
+      <p class="eyebrow">TEAM ${formatNumber(team)} / CONFIRM ROUTE</p>
+      <h2 id="step-skip-confirm-title">4-1に進みますか？</h2>
+      <p id="step-skip-confirm-message">
+        STEP 3-2をスキップします。プレイヤー画面に3-2のログは表示されません。
+      </p>
+      <div class="master-confirm-actions">
+        <button class="master-confirm-button is-yes" type="button" data-step-skip-confirm="yes">
+          YES
+        </button>
+        <button class="master-confirm-button is-no" type="button" data-step-skip-confirm="no">
+          NO
+        </button>
+      </div>
+    </section>
+  `;
+  stage.append(confirmation);
+
+  confirmation
+    .querySelector('[data-step-skip-confirm="yes"]')
+    .addEventListener("click", () => {
+      confirmation.remove();
+      changeStep(state, team, 1, "4-1");
+    });
+  confirmation
+    .querySelector('[data-step-skip-confirm="no"]')
+    .addEventListener("click", () => {
+      confirmation.remove();
+    });
+  confirmation.addEventListener("click", (event) => {
+    if (event.target === confirmation) confirmation.remove();
+  });
+  confirmation.querySelector('[data-step-skip-confirm="no"]').focus();
+}
+
+async function changeStep(state, team, delta, routeTarget = null) {
   if (!state.activeTeams.includes(team) || state.pendingTeams.has(team)) return;
 
   const teamDocument = doc(firestore, "teams", teamDocumentId(team));
@@ -821,14 +944,41 @@ async function changeStep(state, team, delta) {
   try {
     await runTransaction(firestore, async (transaction) => {
       const snapshot = await transaction.get(teamDocument);
-      const currentStep = snapshot.exists() ? normalizeStep(snapshot.data().step) : 1;
-      const nextStep = Math.min(STEP_COUNT, Math.max(1, currentStep + delta));
+      const teamData = snapshot.exists() ? snapshot.data() : {};
+      const currentStep = normalizeStep(teamData.step);
+      const visitedStep32 = normalizeVisitedStep32(teamData);
+
+      if (routeTarget && currentStep !== STEP_31_INDEX) {
+        throw new Error("別の端末でSTEPが変更されました。現在の表示を確認してください");
+      }
+
+      let nextStep = Math.min(STEP_COUNT, Math.max(1, currentStep + delta));
+      let nextVisitedStep32 = visitedStep32;
+
+      if (currentStep === STEP_31_INDEX && delta > 0) {
+        if (routeTarget === "4-1") {
+          nextStep = STEP_41_INDEX;
+          nextVisitedStep32 = false;
+        } else {
+          nextStep = STEP_32_INDEX;
+          nextVisitedStep32 = true;
+        }
+      } else if (
+        currentStep === STEP_41_INDEX &&
+        delta < 0 &&
+        !visitedStep32
+      ) {
+        nextStep = STEP_31_INDEX;
+      } else if (nextStep === STEP_32_INDEX) {
+        nextVisitedStep32 = true;
+      }
 
       transaction.set(
         teamDocument,
         {
           teamNumber: team,
           step: nextStep,
+          visitedStep32: nextVisitedStep32,
           updatedAt: firestoreServerTimestamp(),
           updatedBy: clientId,
         },
@@ -932,18 +1082,34 @@ function renderPlayer(team) {
 
   const teamDocument = doc(firestore, "teams", teamDocumentId(team));
   const cameraControls = setupPlayerCameraControls();
-  let manualStepOverride = readLocalPlayerStep(team);
+  const savedManualProgress = readLocalPlayerProgress(team);
+  let manualStepOverride = savedManualProgress?.step ?? null;
+  let manualVisitedStep32 = savedManualProgress?.visitedStep32 ?? null;
   if (manualStepOverride !== null) {
-    cameraControls.updateStep(manualStepOverride, false);
-    syncManualPlayerStep(teamDocument, team, manualStepOverride);
+    manualVisitedStep32 =
+      typeof manualVisitedStep32 === "boolean"
+        ? manualVisitedStep32
+        : getManualVisitedStep32(
+            manualStepOverride,
+            cameraControls.getCurrentStep(),
+            cameraControls.hasVisitedStep32(),
+          );
+    cameraControls.updateStep(manualStepOverride, false, manualVisitedStep32);
+    syncManualPlayerStep(teamDocument, team, manualStepOverride, manualVisitedStep32);
   }
 
   setupHiddenStaffMenu(team, cameraControls, (step) => {
     const selectedStep = normalizeStep(step);
+    const visitedStep32 = getManualVisitedStep32(
+      selectedStep,
+      cameraControls.getCurrentStep(),
+      cameraControls.hasVisitedStep32(),
+    );
     manualStepOverride = selectedStep;
-    saveLocalPlayerStep(team, selectedStep);
-    cameraControls.updateStep(selectedStep);
-    syncManualPlayerStep(teamDocument, team, selectedStep);
+    manualVisitedStep32 = visitedStep32;
+    saveLocalPlayerProgress(team, selectedStep, visitedStep32);
+    cameraControls.updateStep(selectedStep, true, visitedStep32);
+    syncManualPlayerStep(teamDocument, team, selectedStep, visitedStep32);
   });
 
   const gameEndOverlay = stage.querySelector("[data-game-end-overlay]");
@@ -954,6 +1120,7 @@ function renderPlayer(team) {
       transaction.set(teamDocument, {
         teamNumber: team,
         step: 1,
+        visitedStep32: false,
         createdAt: firestoreServerTimestamp(),
       });
     }
@@ -965,19 +1132,30 @@ function renderPlayer(team) {
     teamDocument,
     { includeMetadataChanges: true },
     (snapshot) => {
-      const step = snapshot.exists() ? normalizeStep(snapshot.data().step) : 1;
+      const teamData = snapshot.exists() ? snapshot.data() : {};
+      const step = normalizeStep(teamData.step);
+      const visitedStep32 = normalizeVisitedStep32(teamData);
 
       if (manualStepOverride !== null) {
-        cameraControls.updateStep(manualStepOverride, false);
+        manualVisitedStep32 =
+          typeof manualVisitedStep32 === "boolean"
+            ? manualVisitedStep32
+            : getManualVisitedStep32(manualStepOverride, step, visitedStep32);
+        cameraControls.updateStep(manualStepOverride, false, manualVisitedStep32);
 
-        if (step === manualStepOverride && !snapshot.metadata.hasPendingWrites) {
-          clearLocalPlayerStep(team);
+        if (
+          step === manualStepOverride &&
+          visitedStep32 === manualVisitedStep32 &&
+          !snapshot.metadata.hasPendingWrites
+        ) {
+          clearLocalPlayerProgress(team);
           manualStepOverride = null;
+          manualVisitedStep32 = null;
         }
         return;
       }
 
-      cameraControls.updateStep(step);
+      cameraControls.updateStep(step, true, visitedStep32);
     },
     (error) => showToast(`STEPを受信できません: ${error.message}`),
   );
@@ -1014,7 +1192,8 @@ function setupPlayerCameraControls() {
   let currentStep = 1;
   let selectedCamera = 1;
   let selectedMapRoom = "A";
-  let renderedLogStep = null;
+  let visitedStep32 = false;
+  let renderedLogState = null;
 
   buttons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -1046,10 +1225,14 @@ function setupPlayerCameraControls() {
     stepPopup.hidden = true;
   });
 
-  function updateStep(step, shouldShowPopup = true) {
+  function updateStep(step, shouldShowPopup = true, nextVisitedStep32 = null) {
     const nextStep = normalizeStep(step);
     const didStepChange = nextStep !== currentStep;
     currentStep = nextStep;
+    visitedStep32 =
+      typeof nextVisitedStep32 === "boolean"
+        ? nextVisitedStep32
+        : nextStep >= STEP_32_INDEX;
 
     if (!isCameraUnlocked(selectedCamera, currentStep)) {
       selectedCamera = getUnlockedCameras(currentStep).at(-1) ?? 1;
@@ -1117,11 +1300,17 @@ function setupPlayerCameraControls() {
   }
 
   function renderLogs() {
-    if (renderedLogStep === currentStep) return;
+    const logState = `${currentStep}:${visitedStep32}`;
+    if (renderedLogState === logState) return;
 
-    const visibleLogs = STEP_LABELS.slice(0, currentStep).flatMap(
-      (stepLabel) => STEP_LOGS[stepLabel] ?? [],
-    );
+    const visibleLogs = STEP_LABELS.slice(0, currentStep)
+      .filter(
+        (stepLabel) =>
+          stepLabel !== "3-2" ||
+          currentStep === STEP_32_INDEX ||
+          visitedStep32,
+      )
+      .flatMap((stepLabel) => STEP_LOGS[stepLabel] ?? []);
 
     logList.innerHTML = visibleLogs
       .map(
@@ -1135,7 +1324,7 @@ function setupPlayerCameraControls() {
       )
       .join("");
 
-    renderedLogStep = currentStep;
+    renderedLogState = logState;
     logViewport.scrollTop = logViewport.scrollHeight;
   }
 
@@ -1176,7 +1365,11 @@ function setupPlayerCameraControls() {
     return currentStep;
   }
 
-  return { updateStep, getCurrentStep };
+  function hasVisitedStep32() {
+    return visitedStep32;
+  }
+
+  return { updateStep, getCurrentStep, hasVisitedStep32 };
 }
 
 function setupHiddenStaffMenu(team, cameraControls, onStepSelect) {
@@ -1293,7 +1486,7 @@ function openPlayerStepSelector(team, cameraControls, onStepSelect) {
   });
 }
 
-function syncManualPlayerStep(teamDocument, team, step) {
+function syncManualPlayerStep(teamDocument, team, step, visitedStep32) {
   const selectedStep = normalizeStep(step);
 
   setDoc(
@@ -1301,6 +1494,7 @@ function syncManualPlayerStep(teamDocument, team, step) {
     {
       teamNumber: team,
       step: selectedStep,
+      visitedStep32: Boolean(visitedStep32),
       updatedAt: firestoreServerTimestamp(),
       updatedBy: clientId,
     },
@@ -1318,21 +1512,67 @@ function normalizeStep(value) {
   return Math.min(STEP_COUNT, Math.max(1, Math.round(step)));
 }
 
+function normalizeVisitedStep32(teamData) {
+  if (typeof teamData?.visitedStep32 === "boolean") {
+    return teamData.visitedStep32;
+  }
+
+  // Documents created before this branch existed followed the normal 3-2 route.
+  return normalizeStep(teamData?.step) >= STEP_32_INDEX;
+}
+
+function isStep32Skipped(step, visitedStep32) {
+  return normalizeStep(step) >= STEP_41_INDEX && !visitedStep32;
+}
+
+function getManualVisitedStep32(selectedStep, currentStep, currentVisitedStep32) {
+  const nextStep = normalizeStep(selectedStep);
+  const previousStep = normalizeStep(currentStep);
+
+  if (nextStep === STEP_32_INDEX) return true;
+  if (nextStep < STEP_32_INDEX) return Boolean(currentVisitedStep32);
+  if (previousStep >= STEP_41_INDEX) return Boolean(currentVisitedStep32);
+  if (previousStep === STEP_31_INDEX && nextStep >= STEP_41_INDEX) return false;
+  return true;
+}
+
 function playerStepStorageKey(team) {
   return `control-player-manual-step-${team}`;
 }
 
-function readLocalPlayerStep(team) {
+function readLocalPlayerProgress(team) {
   const saved = localStorage.getItem(playerStepStorageKey(team));
   if (saved === null) return null;
-  return normalizeStep(saved);
+
+  try {
+    const progress = JSON.parse(saved);
+    if (progress && typeof progress === "object" && "step" in progress) {
+      return {
+        step: normalizeStep(progress.step),
+        visitedStep32:
+          typeof progress.visitedStep32 === "boolean"
+            ? progress.visitedStep32
+            : null,
+      };
+    }
+  } catch {
+    // Older versions stored only the step number.
+  }
+
+  return { step: normalizeStep(saved), visitedStep32: null };
 }
 
-function saveLocalPlayerStep(team, step) {
-  localStorage.setItem(playerStepStorageKey(team), String(normalizeStep(step)));
+function saveLocalPlayerProgress(team, step, visitedStep32) {
+  localStorage.setItem(
+    playerStepStorageKey(team),
+    JSON.stringify({
+      step: normalizeStep(step),
+      visitedStep32: Boolean(visitedStep32),
+    }),
+  );
 }
 
-function clearLocalPlayerStep(team) {
+function clearLocalPlayerProgress(team) {
   localStorage.removeItem(playerStepStorageKey(team));
 }
 
