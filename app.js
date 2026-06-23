@@ -1720,6 +1720,13 @@ async function changeStep(state, team, delta, routeTarget = null) {
       const currentDeskTask = normalizeDeskTask(teamData);
       const deskTaskInstruction =
         delta > 0 ? getConfiguredDeskTaskInstruction(currentStep) : null;
+      const isDeskTaskRollback =
+        delta < 0 &&
+        DESK_TASK_STEPS.includes(nextStep) &&
+        (
+          currentDeskTask.step === nextStep ||
+          currentDeskTask.completedSteps.includes(nextStep)
+        );
       const deskTaskUpdate = deskTaskInstruction
         ? {
             deskTaskStatus: "pending",
@@ -1729,9 +1736,16 @@ async function changeStep(state, team, delta, routeTarget = null) {
             deskTaskRequestedAt: firestoreServerTimestamp(),
             deskTaskRequestedBy: clientId,
           }
-        : delta > 0 && currentDeskTask.status === "done"
-          ? { deskTaskStatus: "idle" }
-          : {};
+        : isDeskTaskRollback
+          ? {
+              deskTaskStatus: "idle",
+              deskTaskCompletedSteps: currentDeskTask.completedSteps.filter(
+                (completedStep) => completedStep !== nextStep,
+              ),
+            }
+          : delta > 0 && currentDeskTask.status === "done"
+            ? { deskTaskStatus: "idle" }
+            : {};
 
       transaction.set(
         teamDocument,
