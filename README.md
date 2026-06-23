@@ -69,6 +69,7 @@ teams/team-01
   deskTaskStep: 1
   deskTaskInstruction: 机の上に○○を置く
   deskTaskRevision: 1
+  deskTaskCompletedSteps: [1, 2]
   deskTaskRequestedAt: server timestamp
   deskTaskRequestedBy: client id
   deskTaskCompletedAt: server timestamp
@@ -131,7 +132,7 @@ control/game
 `version`を新しい値へ変更してください。
 
 ```js
-version: "2026.06.23.8",
+version: "2026.06.23.9",
 ```
 
 バージョンが変わると新しいキャッシュへ全素材を再取得し、読込完了後に古いキャッシュを

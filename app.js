@@ -69,6 +69,9 @@ const DESK_TASKS = Object.freeze({
   "2-2": "チーム番号札取り除け",
   "4-2": "イス倒せ",
 });
+const DESK_TASK_STEPS = Object.freeze(
+  Object.keys(DESK_TASKS).map((stepLabel) => STEP_LABELS.indexOf(stepLabel) + 1),
+);
 const CAMERA_COUNT = 9;
 const CAMERA_FRAME_STEPS = Object.freeze({
   1: STEP_LABELS,
@@ -1081,19 +1084,15 @@ function renderGiantStaff() {
       <header class="staff-topbar">
         <div class="staff-brand">
           <button class="nav-button" id="giant-home" type="button">← HOME</button>
-          <h1>巨人スタッフ CONTROL</h1>
-          <p class="eyebrow">DESK OPERATION BOARD</p>
+          <h1>巨人スタッフ</h1>
         </div>
         <div class="staff-topbar-actions">${connectionBadgeMarkup()}</div>
       </header>
 
       <section class="master-team-panel giant-team-panel" aria-labelledby="giant-team-title">
-        <div class="master-section-heading">
-          <div>
-            <p class="eyebrow">HALL DESK OPERATIONS</p>
-            <h2 id="giant-team-title">机上作業一覧</h2>
-          </div>
-          <div class="master-online-count" id="giant-pending-count">0 TASKS</div>
+        <div class="giant-section-heading">
+          <h2 id="giant-team-title">チーム</h2>
+          <div class="giant-pending-count" id="giant-pending-count">依頼 0</div>
         </div>
         <div class="master-team-grid giant-team-grid" id="giant-team-grid"></div>
       </section>
@@ -1103,10 +1102,40 @@ function renderGiantStaff() {
   stage.querySelector("#giant-home").addEventListener("click", () => navigate({ mode: "home" }));
 
   const state = {
+    activeTeams: [],
+    presenceByTeam: {},
+    serverTimeOffset: null,
     deskTasks: new Map(),
     steps: new Map(),
     pendingTeams: new Set(),
   };
+
+  const unsubscribePresence = onValue(
+    databaseRef(realtimeDatabase, `${PRESENCE_ROOT}/players`),
+    (snapshot) => {
+      state.presenceByTeam = snapshot.val() ?? {};
+      refreshGiantPresence(state);
+    },
+    (error) => showToast(`プレイヤー接続一覧を取得できません: ${error.message}`),
+  );
+
+  const unsubscribeServerTimeOffset = onValue(
+    databaseRef(realtimeDatabase, ".info/serverTimeOffset"),
+    (snapshot) => {
+      const offset = snapshot.val();
+      state.serverTimeOffset =
+        typeof offset === "number" && Number.isFinite(offset) ? offset : null;
+      refreshGiantPresence(state);
+    },
+    () => {
+      state.serverTimeOffset = null;
+    },
+  );
+
+  const presenceCheckTimer = window.setInterval(
+    () => refreshGiantPresence(state),
+    STAFF_PRESENCE_CHECK_INTERVAL_MS,
+  );
 
   const unsubscribeTeams = onSnapshot(
     collection(firestore, "teams"),
@@ -1155,7 +1184,12 @@ function renderGiantStaff() {
     (error) => showToast(`机上作業の監視に失敗しました: ${error.message}`),
   );
 
-  viewCleanups.push(unsubscribeTeams);
+  viewCleanups.push(
+    unsubscribePresence,
+    unsubscribeServerTimeOffset,
+    unsubscribeTeams,
+    () => window.clearInterval(presenceCheckTimer),
+  );
   updateGiantStaffView(state);
 }
 
@@ -1210,6 +1244,11 @@ function refreshStaffPresence(state) {
 function refreshMasterPresence(state) {
   state.activeTeams = getActiveTeams(state.presenceByTeam, state.serverTimeOffset);
   updateMasterView(state);
+}
+
+function refreshGiantPresence(state) {
+  state.activeTeams = getActiveTeams(state.presenceByTeam, state.serverTimeOffset);
+  updateGiantStaffView(state);
 }
 
 function getActiveTeams(presenceByTeam, serverTimeOffset) {
@@ -1301,35 +1340,47 @@ function updateGiantStaffView(state) {
     const team = index + 1;
     const task = state.deskTasks.get(team) ?? normalizeDeskTask();
     const isPending = task.status === "pending";
-    const isDone = task.status === "done";
-    const hasTask = isPending || isDone;
+    const isOnline = state.activeTeams.includes(team);
     const isUpdating = state.pendingTeams.has(team);
+    const progressMarkup = DESK_TASK_STEPS.map((taskStep, taskIndex) => {
+      const isComplete = task.completedSteps.includes(taskStep);
+      const isCurrent = isPending && task.step === taskStep;
+      return `
+        <div
+          class="giant-progress-box ${isComplete ? "is-complete" : ""} ${isCurrent ? "is-current" : ""}"
+          aria-label="${taskIndex + 1}つ目${isComplete ? " 完了" : " 未完了"}"
+        >
+          ${isComplete ? '<span aria-hidden="true">✓</span>' : `<small>${taskIndex + 1}</small>`}
+        </div>
+      `;
+    }).join("");
 
     return `
-      <article class="giant-team-card ${isPending ? "is-pending" : ""} ${isDone ? "is-done" : ""}">
-        <div class="giant-team-number">
-          <span>TEAM</span>
+      <article class="giant-team-card ${isPending ? "is-pending" : ""} ${isOnline ? "is-online" : "is-offline"}">
+        <div class="giant-team-number" aria-label="チーム${team} ${isOnline ? "接続中" : "未接続"}">
           <strong>${formatNumber(team)}</strong>
         </div>
-        <div class="giant-team-task">
-          <span>${hasTask && task.step ? `STEP ${getStepLabel(task.step)}` : "DESK TASK"}</span>
-          <b>${hasTask ? task.instruction || "机上作業" : "依頼待機中"}</b>
-        </div>
-        <div class="giant-team-status">
-          <span>${isPending ? "実行待ち" : isDone ? "完了済み" : "待機中"}</span>
+        <div class="giant-team-body">
           ${
             isPending
               ? `
+                <div class="giant-team-task">
+                  <small>${task.step ? getStepLabel(task.step) : ""}</small>
+                  <b>${task.instruction}</b>
+                </div>
                 <button
                   class="giant-ok-button ${isUpdating ? "loading" : ""}"
                   type="button"
                   data-giant-ok-team="${team}"
                   data-giant-task-revision="${task.revision}"
                   ${isUpdating ? "disabled" : ""}
-                >OK</button>
+                >完了</button>
               `
-              : `<strong>${isDone ? "DONE" : "—"}</strong>`
+              : ""
           }
+        </div>
+        <div class="giant-progress" aria-label="机上作業の進捗">
+          ${progressMarkup}
         </div>
       </article>
     `;
@@ -1350,7 +1401,7 @@ function updateGiantStaffView(state) {
   ).length;
   const countElement = stage.querySelector("#giant-pending-count");
   if (countElement) {
-    countElement.textContent = `${pendingCount} TASK${pendingCount === 1 ? "" : "S"}`;
+    countElement.textContent = `依頼 ${pendingCount}`;
   }
 }
 
@@ -1370,11 +1421,15 @@ async function completeDeskTask(state, team, revision) {
       if (task.status !== "pending" || task.revision !== revision) {
         throw new Error("依頼内容が更新されました。現在の表示を確認してください");
       }
+      const completedSteps = task.step
+        ? [...new Set([...task.completedSteps, task.step])].sort((a, b) => a - b)
+        : task.completedSteps;
 
       transaction.set(
         teamDocument,
         {
           deskTaskStatus: "done",
+          deskTaskCompletedSteps: completedSteps,
           deskTaskCompletedAt: firestoreServerTimestamp(),
           deskTaskCompletedBy: clientId,
         },
@@ -2368,6 +2423,16 @@ function normalizeDeskTask(teamData = {}) {
       : "idle";
   const step = Number(teamData?.deskTaskStep);
   const revision = Number(teamData?.deskTaskRevision);
+  const completedSteps = Array.isArray(teamData?.deskTaskCompletedSteps)
+    ? teamData.deskTaskCompletedSteps
+        .map(Number)
+        .filter(
+          (completedStep, index, values) =>
+            DESK_TASK_STEPS.includes(completedStep) &&
+            values.indexOf(completedStep) === index,
+        )
+        .sort((a, b) => a - b)
+    : [];
   const normalizedTaskStep =
     Number.isInteger(step) && step >= 1 && step <= STEP_COUNT
       ? step
@@ -2391,6 +2456,7 @@ function normalizeDeskTask(teamData = {}) {
         ? revision
         : 0,
     instruction,
+    completedSteps,
   };
 }
 

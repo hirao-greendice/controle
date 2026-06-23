@@ -756,64 +756,99 @@ button {
 .giant-team-panel {
   height: 1012px;
   margin-top: 27px;
+  padding: 26px 28px 30px;
+}
+
+.giant-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+  margin-bottom: 20px;
+}
+
+.giant-section-heading h2 {
+  margin: 0;
+  color: #dce2e7;
+  font-size: 30px;
+  letter-spacing: 0.08em;
+}
+
+.giant-pending-count {
+  min-width: 118px;
+  padding: 12px 18px;
+  color: #87919a;
+  background: #11161a;
+  border: 1px solid #303840;
+  font-size: 17px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.giant-pending-count:not(:empty) {
+  font-variant-numeric: tabular-nums;
 }
 
 .giant-team-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   grid-template-rows: repeat(2, 1fr);
+  gap: 16px;
+  height: 834px;
 }
 
 .giant-team-card {
   display: grid;
-  grid-template-rows: 112px minmax(0, 1fr) 122px;
+  grid-template-rows: 92px minmax(0, 1fr) 76px;
   min-width: 0;
   overflow: hidden;
-  background: #151a1f;
-  border: 1px solid #303840;
+  background: #11161a;
+  border: 1px solid #293139;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .giant-team-card.is-pending {
-  background: linear-gradient(180deg, rgba(242, 168, 59, 0.17), #151a1f 48%);
-  border-color: #d98d2d;
-  box-shadow: inset 0 5px 0 #f2a83b;
-}
-
-.giant-team-card.is-done {
-  background: linear-gradient(180deg, rgba(143, 208, 24, 0.14), #151a1f 48%);
-  border-color: rgba(166, 236, 41, 0.48);
-  box-shadow: inset 0 5px 0 var(--green-bright);
+  background: #17140f;
+  border-color: #e19a35;
+  box-shadow:
+    inset 0 4px 0 #f2a83b,
+    0 0 0 1px rgba(242, 168, 59, 0.14);
 }
 
 .giant-team-number {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  background: rgba(0, 0, 0, 0.27);
-  border-bottom: 1px solid #303840;
-}
-
-.giant-team-number span,
-.giant-team-task span {
-  color: #7f8992;
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 0.14em;
+  display: grid;
+  place-items: center;
+  background: #1a2025;
+  border-bottom: 1px solid #293139;
 }
 
 .giant-team-number strong {
-  color: #dce1e5;
+  color: #606a73;
   font-family: "Arial Narrow", sans-serif;
-  font-size: 58px;
+  font-size: 54px;
   font-weight: 300;
+  letter-spacing: 0.04em;
 }
 
-.giant-team-card.is-pending .giant-team-number strong {
-  color: #ffc56d;
+.giant-team-card.is-online .giant-team-number {
+  background: var(--green-bright);
+  border-bottom-color: #c8ff6d;
 }
 
-.giant-team-card.is-done .giant-team-number strong {
-  color: var(--green-bright);
+.giant-team-card.is-online .giant-team-number strong {
+  color: #101608;
+}
+
+.giant-team-body {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  padding: 18px;
+}
+
+.giant-team-body:empty {
+  padding: 0;
 }
 
 .giant-team-task {
@@ -822,58 +857,85 @@ button {
   align-items: center;
   justify-content: center;
   min-width: 0;
-  padding: 20px 16px;
   text-align: center;
+}
+
+.giant-team-task small {
+  color: #a8722d;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
 }
 
 .giant-team-task b {
   width: 100%;
-  margin-top: 18px;
+  margin-top: 12px;
   overflow: hidden;
-  color: #e6e9ec;
-  font-size: 24px;
-  line-height: 1.35;
+  color: #f3f0e9;
+  font-size: 25px;
+  line-height: 1.32;
   text-overflow: ellipsis;
 }
 
-.giant-team-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border-top: 1px solid #303840;
-}
-
-.giant-team-status > span {
-  color: #88929b;
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.giant-team-status > strong {
-  color: var(--green-bright);
-  font-family: "Arial Narrow", sans-serif;
-  font-size: 31px;
-  letter-spacing: 0.08em;
-}
-
 .giant-ok-button {
-  width: 112px;
-  height: 78px;
+  width: 100%;
+  height: 64px;
+  margin-top: 16px;
   color: #120b02;
   background: #f2a83b;
   border: 1px solid #ffd28d;
   cursor: pointer;
-  font-family: "Arial Narrow", sans-serif;
-  font-size: 38px;
-  font-weight: 800;
+  font-size: 25px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
 }
 
 .giant-ok-button:hover:not(:disabled),
 .giant-ok-button:focus-visible:not(:disabled) {
   background: #ffc05f;
-  outline: 4px solid rgba(255, 196, 95, 0.24);
+  outline: 3px solid rgba(255, 196, 95, 0.24);
+}
+
+.giant-progress {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.22);
+  border-top: 1px solid #293139;
+}
+
+.giant-progress-box {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  color: #59636c;
+  background: #171d22;
+  border: 1px solid #303941;
+  border-radius: 4px;
+}
+
+.giant-progress-box small {
+  font-family: "Arial Narrow", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.giant-progress-box.is-current {
+  color: #f2a83b;
+  border-color: #d98d2d;
+  box-shadow: inset 0 0 0 1px rgba(242, 168, 59, 0.2);
+}
+
+.giant-progress-box.is-complete {
+  color: #0c1406;
+  background: var(--green-bright);
+  border-color: #c6ff61;
+}
+
+.giant-progress-box.is-complete span {
+  font-size: 28px;
+  font-weight: 1000;
 }
 
 .master-team-panel {

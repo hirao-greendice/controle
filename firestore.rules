@@ -26,7 +26,9 @@ service cloud.firestore {
             request.resource.data.deskTaskRevision >= 1 &&
             request.resource.data.deskTaskRequestedBy is string &&
             (!('deskTaskInstruction' in request.resource.data) ||
-              request.resource.data.deskTaskInstruction is string)
+              request.resource.data.deskTaskInstruction is string) &&
+            (!('deskTaskCompletedSteps' in request.resource.data) ||
+              request.resource.data.deskTaskCompletedSteps is list)
           ));
     }
   }
