@@ -132,6 +132,12 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") refreshPresenceNow();
 });
 window.addEventListener("keydown", (event) => {
+  const confirmation = stage.querySelector("#game-confirm:not([hidden])");
+  if (event.key === "Escape" && confirmation) {
+    confirmation.querySelector('[data-game-confirm="no"]')?.click();
+    return;
+  }
+
   if (event.key === "Escape" && route.mode !== "home") {
     navigate({ mode: "home" });
   }
@@ -416,6 +422,28 @@ function renderMaster() {
           </p>
         </aside>
       </div>
+
+      <div class="master-confirm-backdrop" id="game-confirm" hidden>
+        <section
+          class="master-confirm-dialog"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="game-confirm-title"
+          aria-describedby="game-confirm-message"
+        >
+          <p class="eyebrow">CONFIRM OPERATION</p>
+          <h2 id="game-confirm-title">確認</h2>
+          <p id="game-confirm-message">この操作を実行しますか？</p>
+          <div class="master-confirm-actions">
+            <button class="master-confirm-button is-yes" type="button" data-game-confirm="yes">
+              YES
+            </button>
+            <button class="master-confirm-button is-no" type="button" data-game-confirm="no">
+              NO
+            </button>
+          </div>
+        </section>
+      </div>
     </section>
   `;
 
@@ -428,6 +456,7 @@ function renderMaster() {
     steps: new Map(),
     gameStatus: "idle",
     pendingGameStatus: false,
+    confirmationStatus: null,
   };
 
   const unsubscribePresence = onValue(
@@ -485,10 +514,21 @@ function renderMaster() {
   );
 
   stage.querySelector("#game-start").addEventListener("click", () => {
-    changeGameStatus(state, "running");
+    openGameStatusConfirmation(state, "running");
   });
   stage.querySelector("#game-end").addEventListener("click", () => {
-    changeGameStatus(state, "ended");
+    openGameStatusConfirmation(state, "ended");
+  });
+  stage.querySelector('[data-game-confirm="yes"]').addEventListener("click", () => {
+    const confirmedStatus = state.confirmationStatus;
+    closeGameStatusConfirmation(state);
+    if (confirmedStatus) changeGameStatus(state, confirmedStatus);
+  });
+  stage.querySelector('[data-game-confirm="no"]').addEventListener("click", () => {
+    closeGameStatusConfirmation(state);
+  });
+  stage.querySelector("#game-confirm").addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeGameStatusConfirmation(state);
   });
 
   viewCleanups.push(
@@ -588,6 +628,44 @@ function updateMasterView(state) {
   description.textContent = statusContent.description;
   startButton.disabled = state.pendingGameStatus || status === "running";
   endButton.disabled = state.pendingGameStatus || status === "ended";
+}
+
+function openGameStatusConfirmation(state, status) {
+  const nextStatus = normalizeGameStatus(status);
+  if (state.pendingGameStatus || nextStatus === "idle") return;
+
+  const confirmation = stage.querySelector("#game-confirm");
+  const title = stage.querySelector("#game-confirm-title");
+  const message = stage.querySelector("#game-confirm-message");
+  const yesButton = stage.querySelector('[data-game-confirm="yes"]');
+  if (!confirmation || !title || !message || !yesButton) return;
+
+  const content = {
+    running: {
+      title: "ゲームを開始しますか？",
+      message: "YESを押すと、全端末へゲーム開始を送信します。",
+    },
+    ended: {
+      title: "ゲームを終了しますか？",
+      message: "YESを押すと、全プレイヤー画面に終了画像を表示します。",
+    },
+  }[nextStatus];
+
+  state.confirmationStatus = nextStatus;
+  confirmation.dataset.action = nextStatus;
+  title.textContent = content.title;
+  message.textContent = content.message;
+  confirmation.hidden = false;
+  yesButton.focus();
+}
+
+function closeGameStatusConfirmation(state) {
+  state.confirmationStatus = null;
+  const confirmation = stage.querySelector("#game-confirm");
+  if (confirmation) {
+    confirmation.hidden = true;
+    delete confirmation.dataset.action;
+  }
 }
 
 async function changeGameStatus(state, status) {
