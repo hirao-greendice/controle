@@ -1077,6 +1077,7 @@ function renderPlayer(team) {
         <img class="player-step-popup-layer player-step-popup-window" src="./Pop_window.png" alt="" />
         <button class="player-step-popup-close" type="button" data-step-popup-close aria-label="メッセージを閉じる"></button>
       </div>
+      <audio data-player-click-sound src="./click.mp3" preload="auto" playsinline></audio>
     </section>
   `;
 
@@ -1174,13 +1175,49 @@ function renderPlayer(team) {
 
 function setupPlayerClickSound() {
   const playerScreen = stage.querySelector(".player-screen");
-  if (!playerScreen) return;
+  const baseSound = stage.querySelector("[data-player-click-sound]");
+  if (!playerScreen || !baseSound) return;
 
-  const clickSound = new Audio("./click.mp3");
-  clickSound.preload = "auto";
+  const soundPool = [
+    baseSound,
+    ...Array.from({ length: 3 }, () => {
+      const sound = baseSound.cloneNode();
+      sound.removeAttribute("data-player-click-sound");
+      playerScreen.append(sound);
+      return sound;
+    }),
+  ];
+  let nextSoundIndex = 0;
+  const AudioContextClass = window.AudioContext ?? window.webkitAudioContext;
+  const audioContext = AudioContextClass ? new AudioContextClass() : null;
+  let clickSoundBuffer = null;
+
+  if (audioContext) {
+    fetch("./click.mp3")
+      .then((response) => {
+        if (!response.ok) throw new Error(`click.mp3: ${response.status}`);
+        return response.arrayBuffer();
+      })
+      .then((audioData) => audioContext.decodeAudioData(audioData))
+      .then((buffer) => {
+        clickSoundBuffer = buffer;
+      })
+      .catch(() => {});
+  }
+
+  const playWithWebAudio = () => {
+    if (!audioContext || !clickSoundBuffer || audioContext.state !== "running") return;
+
+    const source = audioContext.createBufferSource();
+    source.buffer = clickSoundBuffer;
+    source.connect(audioContext.destination);
+    source.start();
+  };
 
   const playClickSound = (event) => {
-    const button = event.target.closest("button");
+    const button = event.target instanceof Element
+      ? event.target.closest("button")
+      : null;
     if (
       !button ||
       button.disabled ||
@@ -1189,14 +1226,38 @@ function setupPlayerClickSound() {
       return;
     }
 
-    clickSound.currentTime = 0;
-    clickSound.play().catch(() => {});
+    const resumeAudioContext =
+      audioContext?.state === "suspended"
+        ? audioContext.resume().catch(() => {})
+        : Promise.resolve();
+
+    const availableSound = soundPool.find((sound) => sound.paused || sound.ended);
+    const clickSound = availableSound ?? soundPool[nextSoundIndex];
+    nextSoundIndex = (nextSoundIndex + 1) % soundPool.length;
+
+    try {
+      clickSound.currentTime = 0;
+    } catch {
+      clickSound.load();
+    }
+
+    const playResult = clickSound.play();
+    playResult?.catch?.(() => {
+      resumeAudioContext.then(playWithWebAudio);
+    });
   };
 
-  playerScreen.addEventListener("click", playClickSound);
+  soundPool.forEach((sound) => sound.load());
+  const pressEvent = "PointerEvent" in window ? "pointerdown" : "touchstart";
+  playerScreen.addEventListener(pressEvent, playClickSound, true);
   viewCleanups.push(() => {
-    playerScreen.removeEventListener("click", playClickSound);
-    clickSound.pause();
+    playerScreen.removeEventListener(pressEvent, playClickSound, true);
+    soundPool.forEach((sound) => {
+      sound.pause();
+      sound.removeAttribute("src");
+      sound.load();
+    });
+    audioContext?.close().catch(() => {});
   });
 }
 
