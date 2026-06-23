@@ -591,7 +591,7 @@ button {
 .master-team-detail {
   align-items: center;
   min-width: 0;
-  padding: 20px 14px 16px;
+  padding: 20px 14px;
   text-align: center;
 }
 
@@ -611,26 +611,14 @@ button {
   letter-spacing: 0.14em;
 }
 
-.master-team-detail strong {
-  margin-top: 10px;
-  color: #77818a;
-  font-size: 25px;
-  letter-spacing: 0.08em;
-}
-
-.master-team-card.is-online .master-team-detail strong {
-  color: var(--green-bright);
-}
-
 .master-team-note {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   width: 100%;
+  height: 100%;
   min-width: 0;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #303840;
 }
 
 .master-team-note span {
@@ -642,10 +630,10 @@ button {
 
 .master-team-note b {
   width: 100%;
-  margin-top: 9px;
+  margin-top: 16px;
   overflow: hidden;
   color: #d8dde2;
-  font-size: 19px;
+  font-size: 23px;
   letter-spacing: 0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1254,6 +1242,104 @@ button {
 .staff-popup-actions button:focus-visible {
   background: #fff;
   outline: 4px solid rgba(255, 255, 255, 0.22);
+}
+
+.player-step-selector {
+  width: 1120px;
+  padding: 50px 58px 56px;
+}
+
+.player-step-selector h2 {
+  margin-bottom: 18px;
+}
+
+.player-step-selector-note {
+  margin: 0 0 34px;
+  color: #9ca6af;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.player-step-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.player-step-selector-grid button {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  grid-template-rows: 62px 38px;
+  align-items: center;
+  min-width: 0;
+  height: 132px;
+  padding: 14px 20px;
+  color: #e4e8eb;
+  background: #1a2025;
+  border: 1px solid #3d4750;
+  cursor: pointer;
+  text-align: left;
+}
+
+.player-step-selector-grid button.is-current {
+  color: #071006;
+  background: var(--green-bright);
+  border-color: #d3ff7c;
+  box-shadow: 0 0 26px rgba(166, 236, 41, 0.3);
+}
+
+.player-step-selector-grid button:hover,
+.player-step-selector-grid button:focus-visible {
+  border-color: #fff;
+  outline: 3px solid rgba(255, 255, 255, 0.25);
+  outline-offset: 2px;
+}
+
+.player-step-selector-grid span {
+  color: #87919a;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.player-step-selector-grid button.is-current span,
+.player-step-selector-grid button.is-current small {
+  color: #23300b;
+}
+
+.player-step-selector-grid strong {
+  font-family: "Arial Narrow", sans-serif;
+  font-size: 43px;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+}
+
+.player-step-selector-grid small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: #b4bbc1;
+  font-size: 17px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-step-selector-cancel {
+  width: 100%;
+  height: 76px;
+  margin-top: 24px;
+  color: #e4e8eb;
+  background: #252b31;
+  border: 1px solid #56616b;
+  cursor: pointer;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.player-step-selector-cancel:hover,
+.player-step-selector-cancel:focus-visible {
+  background: #30373e;
+  outline: 3px solid rgba(255, 255, 255, 0.22);
 }
 
 .toast.is-success {

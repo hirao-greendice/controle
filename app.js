@@ -6,6 +6,7 @@ import {
   onSnapshot,
   runTransaction,
   serverTimestamp as firestoreServerTimestamp,
+  setDoc,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 import {
   getDatabase,
@@ -605,8 +606,6 @@ function updateMasterView(state) {
       <article class="master-team-card ${isOnline ? "is-online" : "is-offline"}">
         <div class="master-team-number">${formatNumber(team)}</div>
         <div class="master-team-detail">
-          <span>CONNECTION</span>
-          <strong>${isOnline ? "接続中" : "未接続"}</strong>
           <div class="master-team-note">
             <span>INFO</span>
             <b>${isOnline ? getStepNote(step) || "—" : "—"}</b>
@@ -887,11 +886,24 @@ function renderPlayer(team) {
     </section>
   `;
 
+  const teamDocument = doc(firestore, "teams", teamDocumentId(team));
   const cameraControls = setupPlayerCameraControls();
-  setupHiddenStaffMenu();
+  let manualStepOverride = readLocalPlayerStep(team);
+  if (manualStepOverride !== null) {
+    cameraControls.updateStep(manualStepOverride, false);
+    syncManualPlayerStep(teamDocument, team, manualStepOverride);
+  }
+
+  setupHiddenStaffMenu(team, cameraControls, (step) => {
+    const selectedStep = normalizeStep(step);
+    manualStepOverride = selectedStep;
+    saveLocalPlayerStep(team, selectedStep);
+    cameraControls.updateStep(selectedStep);
+    syncManualPlayerStep(teamDocument, team, selectedStep);
+  });
+
   const gameEndOverlay = stage.querySelector("[data-game-end-overlay]");
 
-  const teamDocument = doc(firestore, "teams", teamDocumentId(team));
   runTransaction(firestore, async (transaction) => {
     const snapshot = await transaction.get(teamDocument);
     if (!snapshot.exists()) {
@@ -907,8 +919,20 @@ function renderPlayer(team) {
 
   const unsubscribe = onSnapshot(
     teamDocument,
+    { includeMetadataChanges: true },
     (snapshot) => {
       const step = snapshot.exists() ? normalizeStep(snapshot.data().step) : 1;
+
+      if (manualStepOverride !== null) {
+        cameraControls.updateStep(manualStepOverride, false);
+
+        if (step === manualStepOverride && !snapshot.metadata.hasPendingWrites) {
+          clearLocalPlayerStep(team);
+          manualStepOverride = null;
+        }
+        return;
+      }
+
       cameraControls.updateStep(step);
     },
     (error) => showToast(`STEPを受信できません: ${error.message}`),
@@ -978,7 +1002,7 @@ function setupPlayerCameraControls() {
     stepPopup.hidden = true;
   });
 
-  function updateStep(step) {
+  function updateStep(step, shouldShowPopup = true) {
     const nextStep = normalizeStep(step);
     const didStepChange = nextStep !== currentStep;
     currentStep = nextStep;
@@ -989,7 +1013,7 @@ function setupPlayerCameraControls() {
 
     render();
 
-    if (didStepChange) {
+    if (didStepChange && shouldShowPopup) {
       showStepPopup();
     }
   }
@@ -1104,10 +1128,14 @@ function setupPlayerCameraControls() {
 
   updateStep(1);
 
-  return { updateStep };
+  function getCurrentStep() {
+    return currentStep;
+  }
+
+  return { updateStep, getCurrentStep };
 }
 
-function setupHiddenStaffMenu() {
+function setupHiddenStaffMenu(team, cameraControls, onStepSelect) {
   const trigger = stage.querySelector("#hidden-staff-trigger");
   let tapCount = 0;
   let resetTimer = null;
@@ -1118,7 +1146,7 @@ function setupHiddenStaffMenu() {
 
     if (tapCount >= 5) {
       tapCount = 0;
-      openStaffPopup();
+      openStaffPopup(team, cameraControls, onStepSelect);
       return;
     }
 
@@ -1130,7 +1158,7 @@ function setupHiddenStaffMenu() {
   viewCleanups.push(() => clearTimeout(resetTimer));
 }
 
-function openStaffPopup() {
+function openStaffPopup(team, cameraControls, onStepSelect) {
   if (stage.querySelector("#staff-popup")) return;
 
   const popup = document.createElement("div");
@@ -1141,6 +1169,7 @@ function openStaffPopup() {
       <p class="eyebrow">AUTHORIZED PERSONNEL ONLY</p>
       <h2 id="staff-popup-title">STAFF MENU</h2>
       <div class="staff-popup-actions">
+        <button type="button" data-popup-action="step">STEP移動</button>
         <button type="button" data-popup-action="home">ホームに戻る</button>
         <button type="button" data-popup-action="reload">リロード</button>
         <button type="button" data-popup-action="close">戻る</button>
@@ -1149,6 +1178,10 @@ function openStaffPopup() {
   `;
   stage.append(popup);
 
+  popup.querySelector('[data-popup-action="step"]').addEventListener("click", () => {
+    popup.remove();
+    openPlayerStepSelector(team, cameraControls, onStepSelect);
+  });
   popup.querySelector('[data-popup-action="home"]').addEventListener("click", () => {
     navigate({ mode: "home" });
   });
@@ -1160,10 +1193,103 @@ function openStaffPopup() {
   });
 }
 
+function openPlayerStepSelector(team, cameraControls, onStepSelect) {
+  stage.querySelector("#player-step-selector")?.remove();
+
+  const selector = document.createElement("div");
+  selector.className = "staff-popup-backdrop";
+  selector.id = "player-step-selector";
+  selector.innerHTML = `
+    <section
+      class="staff-popup player-step-selector"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="player-step-selector-title"
+    >
+      <p class="eyebrow">TEAM ${formatNumber(team)} / MANUAL CONTROL</p>
+      <h2 id="player-step-selector-title">STEP移動</h2>
+      <p class="player-step-selector-note">
+        通信停止中でも、この端末の画面を選択したSTEPへ移動できます。
+      </p>
+      <div class="player-step-selector-grid">
+        ${STEP_LABELS.map(
+          (stepLabel, index) => `
+            <button
+              type="button"
+              data-select-step="${index + 1}"
+              class="${cameraControls.getCurrentStep() === index + 1 ? "is-current" : ""}"
+            >
+              <span>STEP</span>
+              <strong>${stepLabel}</strong>
+              <small>${STEP_NOTES[stepLabel] || "補足なし"}</small>
+            </button>
+          `,
+        ).join("")}
+      </div>
+      <button class="player-step-selector-cancel" type="button" data-step-selector-close>
+        戻る
+      </button>
+    </section>
+  `;
+  stage.append(selector);
+
+  selector.querySelectorAll("[data-select-step]").forEach((button) => {
+    button.addEventListener("click", () => {
+      onStepSelect(Number(button.dataset.selectStep));
+      selector.remove();
+      showToast(`STEP ${getStepLabel(Number(button.dataset.selectStep))}へ移動しました`, "success");
+    });
+  });
+  selector.querySelector("[data-step-selector-close]").addEventListener("click", () => {
+    selector.remove();
+    openStaffPopup(team, cameraControls, onStepSelect);
+  });
+  selector.addEventListener("click", (event) => {
+    if (event.target === selector) selector.remove();
+  });
+}
+
+function syncManualPlayerStep(teamDocument, team, step) {
+  const selectedStep = normalizeStep(step);
+
+  setDoc(
+    teamDocument,
+    {
+      teamNumber: team,
+      step: selectedStep,
+      updatedAt: firestoreServerTimestamp(),
+      updatedBy: clientId,
+    },
+    { merge: true },
+  ).catch((error) => {
+    showToast(
+      `STEP ${getStepLabel(selectedStep)}を端末内に保存しました。通信復帰後に再同期します: ${error.message}`,
+    );
+  });
+}
+
 function normalizeStep(value) {
   const step = Number(value);
   if (!Number.isFinite(step)) return 1;
   return Math.min(STEP_COUNT, Math.max(1, Math.round(step)));
+}
+
+function playerStepStorageKey(team) {
+  return `control-player-manual-step-${team}`;
+}
+
+function readLocalPlayerStep(team) {
+  const saved = localStorage.getItem(playerStepStorageKey(team));
+  if (saved === null) return null;
+  return normalizeStep(saved);
+}
+
+function saveLocalPlayerStep(team, step) {
+  localStorage.setItem(playerStepStorageKey(team), String(normalizeStep(step)));
+}
+
+function clearLocalPlayerStep(team) {
+  localStorage.removeItem(playerStepStorageKey(team));
 }
 
 function normalizeGameStatus(value) {
