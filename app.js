@@ -149,6 +149,16 @@ window.addEventListener("pageshow", refreshPresenceNow);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") refreshPresenceNow();
 });
+document.addEventListener("gesturestart", preventPageZoom, { passive: false });
+document.addEventListener("gesturechange", preventPageZoom, { passive: false });
+document.addEventListener("gestureend", preventPageZoom, { passive: false });
+document.addEventListener(
+  "touchmove",
+  (event) => {
+    if (event.touches.length > 1) preventPageZoom(event);
+  },
+  { passive: false },
+);
 window.addEventListener("keydown", (event) => {
   const step32SkipConfirmation = stage.querySelector("#step-32-skip-confirm");
   if (event.key === "Escape" && step32SkipConfirmation) {
@@ -184,6 +194,10 @@ onValue(
 );
 
 renderRoute();
+
+function preventPageZoom(event) {
+  event.preventDefault();
+}
 
 function getClientId() {
   const saved = sessionStorage.getItem("control-client-id");

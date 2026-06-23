@@ -26,6 +26,8 @@ body {
   margin: 0;
   overflow: hidden;
   background: #000;
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
 }
 
 button {
@@ -881,7 +883,6 @@ button {
 }
 
 .player-base-layer,
-.player-camera-layer,
 .player-camera-feed-layer {
   position: absolute;
   top: 0;
@@ -939,9 +940,9 @@ button {
 .player-log-viewport {
   position: absolute;
   top: 262px;
-  left: 1490px;
+  left: 1200px;
   z-index: 1;
-  width: 401px;
+  width: 681px;
   height: 829px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -966,15 +967,15 @@ button {
 .player-log-list {
   display: flex;
   flex-direction: column;
-  width: 401px;
+  width: 681px;
   min-height: 100%;
 }
 
 .player-log-entry {
   display: block;
-  flex: 0 0 121px;
-  width: 401px;
-  height: 121px;
+  flex: 0 0 auto;
+  width: 681px;
+  height: auto;
   max-width: none;
   pointer-events: none;
   user-select: none;
@@ -989,7 +990,16 @@ button {
 }
 
 .player-camera-layer {
-  height: 256px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 301px;
+  height: 1201px;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
   visibility: hidden;
 }
 
@@ -999,13 +1009,13 @@ button {
 
 .player-camera-controls {
   position: absolute;
-  top: 181px;
-  left: 80px;
+  top: 177px;
+  left: 82px;
   z-index: 6;
   display: grid;
-  grid-template-columns: repeat(9, 1fr);
-  width: 1380px;
-  height: 75px;
+  grid-template-rows: repeat(9, 1fr);
+  width: 156px;
+  height: 928px;
 }
 
 .player-camera-button {
