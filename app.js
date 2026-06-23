@@ -450,24 +450,31 @@ function decodeImageAsset(url) {
 }
 
 function preloadAudioAsset(url) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const audio = new Audio();
-    const timeout = window.setTimeout(resolve, 8000);
+    let settled = false;
+    const timeout = window.setTimeout(finish, 5000);
 
-    const finish = () => {
+    function finish() {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timeout);
+      audio.removeEventListener("loadedmetadata", finish);
+      audio.removeEventListener("canplay", finish);
       audio.removeEventListener("canplaythrough", finish);
-      audio.removeEventListener("error", fail);
+      audio.removeEventListener("error", finish);
       resolve();
-    };
-    const fail = () => {
-      window.clearTimeout(timeout);
-      reject(new Error(`${assetFileName(url)}の音声展開に失敗しました`));
-    };
+    }
 
     audio.preload = "auto";
+    audio.addEventListener("loadedmetadata", finish, { once: true });
+    audio.addEventListener("canplay", finish, { once: true });
     audio.addEventListener("canplaythrough", finish, { once: true });
-    audio.addEventListener("error", fail, { once: true });
+    // iOS/Safari may reject media decoding before a user gesture even when the
+    // complete audio file has already been fetched and cached successfully.
+    // Playback is retried from the persistent cache when the user presses a
+    // sound button, so this device-dependent warm-up failure is non-fatal.
+    audio.addEventListener("error", finish, { once: true });
     audio.src = url;
     audio.load();
   });
