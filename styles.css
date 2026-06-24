@@ -1197,6 +1197,12 @@ button {
   border-color: #ef6572;
 }
 
+.master-game-button.is-reset {
+  color: #151006;
+  background: #f4c75f;
+  border-color: #ffe28c;
+}
+
 .master-game-button:hover:not(:disabled),
 .master-game-button:focus-visible:not(:disabled) {
   filter: brightness(1.12);
@@ -1271,7 +1277,8 @@ button {
   border-color: #c6ff61;
 }
 
-.master-confirm-backdrop[data-action="ended"] .master-confirm-button.is-yes {
+.master-confirm-backdrop[data-action="ended"] .master-confirm-button.is-yes,
+.master-confirm-backdrop[data-action="reset-progress"] .master-confirm-button.is-yes {
   color: #fff;
   background: #b42f3d;
   border-color: #ef6572;

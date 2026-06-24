@@ -7,6 +7,7 @@ import {
   runTransaction,
   serverTimestamp as firestoreServerTimestamp,
   setDoc,
+  writeBatch,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 import {
   getDatabase,
@@ -974,6 +975,9 @@ function renderMaster() {
             <button class="master-game-button is-end" id="game-end" type="button">
               ゲーム終了
             </button>
+            <button class="master-game-button is-reset" id="progress-reset" type="button">
+              RESET ALL
+            </button>
           </div>
         </aside>
       </div>
@@ -1012,6 +1016,8 @@ function renderMaster() {
     deskTasks: new Map(),
     gameStatus: "idle",
     pendingGameStatus: false,
+    pendingProgressReset: false,
+    confirmationAction: null,
     confirmationStatus: null,
   };
 
@@ -1078,10 +1084,18 @@ function renderMaster() {
   stage.querySelector("#game-end").addEventListener("click", () => {
     openGameStatusConfirmation(state, "ended");
   });
+  stage.querySelector("#progress-reset").addEventListener("click", () => {
+    openProgressResetConfirmation(state);
+  });
   stage.querySelector('[data-game-confirm="yes"]').addEventListener("click", () => {
+    const confirmedAction = state.confirmationAction;
     const confirmedStatus = state.confirmationStatus;
     closeGameStatusConfirmation(state);
-    if (confirmedStatus) changeGameStatus(state, confirmedStatus);
+    if (confirmedAction === "progress-reset") {
+      resetAllTeamProgress(state);
+    } else if (confirmedStatus) {
+      changeGameStatus(state, confirmedStatus);
+    }
   });
   stage.querySelector('[data-game-confirm="no"]').addEventListener("click", () => {
     closeGameStatusConfirmation(state);
@@ -1368,7 +1382,8 @@ function updateMasterView(state) {
   const statusElement = stage.querySelector("#master-game-status");
   const startButton = stage.querySelector("#game-start");
   const endButton = stage.querySelector("#game-end");
-  if (!statusElement || !startButton || !endButton) return;
+  const resetButton = stage.querySelector("#progress-reset");
+  if (!statusElement || !startButton || !endButton || !resetButton) return;
 
   const statusContent = {
     idle: "開始前",
@@ -1378,8 +1393,11 @@ function updateMasterView(state) {
 
   statusElement.dataset.status = status;
   statusElement.querySelector("strong").textContent = statusContent;
-  startButton.disabled = state.pendingGameStatus || status === "running";
-  endButton.disabled = state.pendingGameStatus || status === "ended";
+  startButton.disabled =
+    state.pendingGameStatus || state.pendingProgressReset || status === "running";
+  endButton.disabled =
+    state.pendingGameStatus || state.pendingProgressReset || status === "ended";
+  resetButton.disabled = state.pendingGameStatus || state.pendingProgressReset;
 }
 
 function updateGiantStaffView(state) {
@@ -1494,6 +1512,24 @@ async function completeDeskTask(state, team, revision) {
   }
 }
 
+function openProgressResetConfirmation(state) {
+  if (state.pendingProgressReset) return;
+
+  const confirmation = stage.querySelector("#game-confirm");
+  const title = stage.querySelector("#game-confirm-title");
+  const message = stage.querySelector("#game-confirm-message");
+  const yesButton = stage.querySelector('[data-game-confirm="yes"]');
+  if (!confirmation || !title || !message || !yesButton) return;
+
+  state.confirmationAction = "progress-reset";
+  state.confirmationStatus = null;
+  confirmation.dataset.action = "reset-progress";
+  title.textContent = "RESET ALL PROGRESS?";
+  message.textContent = "YES resets every team to STEP 1-1 and clears desk-task progress.";
+  confirmation.hidden = false;
+  yesButton.focus();
+}
+
 function openGameStatusConfirmation(state, status) {
   const nextStatus = normalizeGameStatus(status);
   if (state.pendingGameStatus || nextStatus === "idle") return;
@@ -1515,6 +1551,7 @@ function openGameStatusConfirmation(state, status) {
     },
   }[nextStatus];
 
+  state.confirmationAction = "game-status";
   state.confirmationStatus = nextStatus;
   confirmation.dataset.action = nextStatus;
   title.textContent = content.title;
@@ -1524,6 +1561,7 @@ function openGameStatusConfirmation(state, status) {
 }
 
 function closeGameStatusConfirmation(state) {
+  state.confirmationAction = null;
   state.confirmationStatus = null;
   const confirmation = stage.querySelector("#game-confirm");
   if (confirmation) {
@@ -1549,6 +1587,51 @@ async function changeGameStatus(state, status) {
     showToast(`ゲーム状態を更新できません: ${error.message}`);
   } finally {
     state.pendingGameStatus = false;
+    updateMasterView(state);
+  }
+}
+
+async function resetAllTeamProgress(state) {
+  if (state.pendingProgressReset) return;
+
+  state.pendingProgressReset = true;
+  updateMasterView(state);
+
+  try {
+    const batch = writeBatch(firestore);
+
+    for (let team = 1; team <= TEAM_COUNT; team += 1) {
+      batch.set(
+        doc(firestore, "teams", teamDocumentId(team)),
+        {
+          teamNumber: team,
+          step: 1,
+          previousStep: 1,
+          visitedStep32: false,
+          deskTaskStatus: "idle",
+          deskTaskStep: null,
+          deskTaskInstruction: "",
+          deskTaskRevision: 0,
+          deskTaskCompletedSteps: [],
+          deskTaskRequestedAt: null,
+          deskTaskRequestedBy: null,
+          deskTaskCompletedAt: null,
+          deskTaskCompletedBy: null,
+          progressResetAt: firestoreServerTimestamp(),
+          progressResetBy: clientId,
+          updatedAt: firestoreServerTimestamp(),
+          updatedBy: clientId,
+        },
+        { merge: true },
+      );
+    }
+
+    await batch.commit();
+    showToast("All team progress has been reset.", "success");
+  } catch (error) {
+    showToast(`Progress reset failed: ${error.message}`);
+  } finally {
+    state.pendingProgressReset = false;
     updateMasterView(state);
   }
 }
