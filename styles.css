@@ -520,7 +520,7 @@ button {
   display: flex;
   align-items: stretch;
   justify-content: flex-end;
-  gap: 16px;
+  gap: 10px;
   height: 78px;
   margin: 18px 0 0 138px;
 }
@@ -548,13 +548,15 @@ button {
 }
 
 .staff-audio-button {
-  width: 260px;
+  width: 162px;
   color: #080a0c;
-  border: 1px solid transparent;
+  background: #f2a83b;
+  border: 1px solid #ffd28d;
   cursor: pointer;
-  font-size: 25px;
+  font-family: "DIN Condensed", "Bahnschrift", "Arial Narrow", sans-serif;
+  font-size: 21px;
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   transition:
     filter 120ms ease,
     transform 120ms ease;
@@ -566,16 +568,6 @@ button {
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.2em;
-}
-
-.staff-audio-button.is-clear {
-  background: var(--green-bright);
-  border-color: #c6ff61;
-}
-
-.staff-audio-button.is-suzu {
-  background: #f2a83b;
-  border-color: #ffd28d;
 }
 
 .staff-audio-button:hover,

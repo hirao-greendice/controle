@@ -161,8 +161,16 @@ const PRESENCE_RETRY_DELAY_MS = 3000;
 const PRESENCE_STALE_AFTER_MS = 20000;
 const STAFF_PRESENCE_CHECK_INTERVAL_MS = 5000;
 const PLAYER_CLICK_VOLUME = 0.5;
-const STAFF_CLEAR_VOLUME = 1.0;
-const STAFF_SUZU_VOLUME = 1.0;
+const STAFF_AUDIO_FADE_START_MS = 3000;
+const STAFF_AUDIO_FADE_DURATION_MS = 700;
+const STAFF_AUDIO_SOUNDS = Object.freeze([
+  Object.freeze({ name: "clock", label: "懐中時計", asset: "clock.mp3", volume: 1.0 }),
+  Object.freeze({ name: "suzu", label: "鈴", asset: "suzu.mp3", volume: 3.0 }),
+  Object.freeze({ name: "hakutyou", label: "白鳥", asset: "hakutyou.mp3", volume: 0.2 }),
+  Object.freeze({ name: "comic", label: "漫画", asset: "comic.mp3", volume: 1.0 }),
+  Object.freeze({ name: "manta", label: "マンタ", asset: "spo_ge_suityu02.mp3", volume: 3.0 }),
+  Object.freeze({ name: "madora", label: "マドラー", asset: "madora.mp3", volume: 1.0 }),
+]);
 const ASSET_CACHE_CONFIG = globalThis.CONTROL_ASSET_CACHE;
 const ASSET_CACHE_NAME = ASSET_CACHE_CONFIG
   ? `${ASSET_CACHE_CONFIG.cachePrefix}${ASSET_CACHE_CONFIG.version}`
@@ -777,6 +785,13 @@ function renderHome() {
 function renderStaff(staffGroup = "first") {
   const normalizedGroup = staffGroup === "second" ? "second" : "first";
   const teamNumbers = STAFF_TEAM_GROUPS[normalizedGroup];
+  const staffAudioButtons = STAFF_AUDIO_SOUNDS.map(
+    ({ name, label }) => `
+      <button class="staff-audio-button" type="button" data-staff-audio="${name}">
+        ${label}
+      </button>
+    `,
+  ).join("");
   const groupLabel = normalizedGroup === "first" ? "前半" : "後半";
   const teamRangeLabel =
     normalizedGroup === "first" ? "TEAM 01–05" : "TEAM 06–10";
@@ -810,16 +825,7 @@ function renderStaff(staffGroup = "first") {
           <span>AUDIO CONTROL</span>
           <strong>この端末から再生</strong>
         </div>
-        <button class="staff-audio-button is-clear" type="button" data-staff-audio="clear">
-          正解音声
-          <small>CLEAR</small>
-        </button>
-        <button class="staff-audio-button is-suzu" type="button" data-staff-audio="suzu">
-          鈴音声
-          <small>SUZU</small>
-        </button>
-        <audio data-staff-audio-source="clear" src="${versionedAssetUrl("./clear.mp3")}" preload="auto" playsinline></audio>
-        <audio data-staff-audio-source="suzu" src="${versionedAssetUrl("./suzu.mp3")}" preload="auto" playsinline></audio>
+        ${staffAudioButtons}
       </div>
     </section>
   `;
@@ -898,38 +904,120 @@ function renderStaff(staffGroup = "first") {
 }
 
 function setupStaffAudioControls() {
-  const audioSettings = {
-    clear: {
-      volume: STAFF_CLEAR_VOLUME,
-      audio: stage.querySelector('[data-staff-audio-source="clear"]'),
-    },
-    suzu: {
-      volume: STAFF_SUZU_VOLUME,
-      audio: stage.querySelector('[data-staff-audio-source="suzu"]'),
-    },
+  let audioContext = null;
+  const audioSettings = Object.fromEntries(
+    STAFF_AUDIO_SOUNDS.map(({ name, asset, volume }) => [
+      name,
+      {
+        asset,
+        volume,
+        buffer: null,
+        bufferPromise: null,
+        source: null,
+        gain: null,
+        playToken: 0,
+      },
+    ]),
+  );
+
+  const getAudioContext = () => {
+    if (!audioContext) {
+      const AudioContextClass = window.AudioContext ?? window.webkitAudioContext;
+      if (!AudioContextClass) throw new Error("Web Audio is not available");
+      audioContext = new AudioContextClass();
+    }
+    return audioContext;
   };
 
-  Object.values(audioSettings).forEach(({ audio, volume }) => {
-    if (!audio) return;
-    audio.volume = volume;
-    audio.load();
-  });
+  const decodeAudioData = (context, audioData) =>
+    new Promise((resolve, reject) => {
+      const decodeResult = context.decodeAudioData(audioData, resolve, reject);
+      decodeResult?.then?.(resolve, reject);
+    });
 
-  const playStaffAudio = (event) => {
+  const loadAudioBuffer = (setting) => {
+    if (setting.buffer) return Promise.resolve(setting.buffer);
+    if (!setting.bufferPromise) {
+      const context = getAudioContext();
+      setting.bufferPromise = fetch(versionedAssetUrl(`./${setting.asset}`), {
+        credentials: "same-origin",
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error(`${setting.asset}: ${response.status}`);
+          return response.arrayBuffer();
+        })
+        .then((audioData) => decodeAudioData(context, audioData))
+        .then((buffer) => {
+          setting.buffer = buffer;
+          return buffer;
+        })
+        .catch((error) => {
+          setting.bufferPromise = null;
+          throw error;
+        });
+    }
+    return setting.bufferPromise;
+  };
+
+  const stopPlayback = (setting) => {
+    if (setting.source) {
+      try {
+        setting.source.stop();
+      } catch {}
+      try {
+        setting.source.disconnect();
+      } catch {}
+      setting.source = null;
+    }
+    if (setting.gain) {
+      try {
+        setting.gain.disconnect();
+      } catch {}
+      setting.gain = null;
+    }
+  };
+
+  const playStaffAudio = async (event) => {
     const soundName = event.currentTarget.dataset.staffAudio;
     const setting = audioSettings[soundName];
-    if (!setting?.audio) return;
+    if (!setting) return;
+
+    const playToken = setting.playToken + 1;
+    setting.playToken = playToken;
+    stopPlayback(setting);
 
     try {
-      setting.audio.currentTime = 0;
-    } catch {
-      setting.audio.load();
-    }
+      const context = getAudioContext();
+      await context.resume();
+      const buffer = await loadAudioBuffer(setting);
+      if (setting.playToken !== playToken) return;
 
-    const playResult = setting.audio.play();
-    playResult?.catch?.((error) => {
-      showToast(`音声を再生できません: ${error.message}`);
-    });
+      const source = context.createBufferSource();
+      const gain = context.createGain();
+      const now = context.currentTime;
+      const fadeStartAt = now + STAFF_AUDIO_FADE_START_MS / 1000;
+      const fadeEndAt = fadeStartAt + STAFF_AUDIO_FADE_DURATION_MS / 1000;
+
+      source.buffer = buffer;
+      gain.gain.setValueAtTime(setting.volume, now);
+      gain.gain.setValueAtTime(setting.volume, fadeStartAt);
+      gain.gain.linearRampToValueAtTime(0, fadeEndAt);
+      source.connect(gain);
+      gain.connect(context.destination);
+      source.onended = () => {
+        if (setting.source === source) {
+          stopPlayback(setting);
+        }
+      };
+
+      setting.source = source;
+      setting.gain = gain;
+      source.start(now);
+      source.stop(fadeEndAt + 0.05);
+    } catch (error) {
+      if (setting.playToken !== playToken) return;
+      showToast(`Audio playback failed: ${error.message}`);
+    }
   };
 
   const buttons = [...stage.querySelectorAll("[data-staff-audio]")];
@@ -941,12 +1029,11 @@ function setupStaffAudioControls() {
     buttons.forEach((button) => {
       button.removeEventListener("click", playStaffAudio);
     });
-    Object.values(audioSettings).forEach(({ audio }) => {
-      if (!audio) return;
-      audio.pause();
-      audio.removeAttribute("src");
-      audio.load();
+    Object.values(audioSettings).forEach((setting) => {
+      setting.playToken += 1;
+      stopPlayback(setting);
     });
+    audioContext?.close().catch(() => {});
   });
 }
 
