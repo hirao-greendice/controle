@@ -1756,7 +1756,7 @@ function updateStaffView(state) {
             type="button"
             data-step-team="${team}"
             data-step-delta="-1"
-            ${!isOnline || isPending || step <= 1 ? "disabled" : ""}
+            ${!isOnline || isPending || (!isDeskTaskPending && step <= 1) ? "disabled" : ""}
           >${skippedStep32 && step === STEP_41_INDEX ? "3-1へ戻す" : "戻す"}</button>
         </div>
       `;
