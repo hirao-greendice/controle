@@ -1203,6 +1203,10 @@ function renderGiantStaff() {
                 task.status === "pending" &&
                 task.step === previousStep &&
                 task.instruction === instruction
+              ) &&
+              !(
+                task.step === previousStep &&
+                task.completedSteps.includes(previousStep)
               )
             ) {
               ensureDeskTaskForStepTransition(
@@ -1253,12 +1257,20 @@ async function ensureDeskTaskForStepTransition(
       ) {
         return;
       }
+      if (
+        currentTask.step === triggerStep &&
+        currentTask.completedSteps.includes(triggerStep)
+      ) {
+        return;
+      }
 
       transaction.set(
         teamDocument,
         {
           deskTaskStatus: "pending",
           deskTaskStep: triggerStep,
+          deskTaskTargetStep: observedStep,
+          deskTaskTargetVisitedStep32: normalizeVisitedStep32(teamData),
           deskTaskInstruction: instruction,
           deskTaskRevision: currentTask.revision + 1,
           deskTaskRequestedAt: firestoreServerTimestamp(),
@@ -1485,7 +1497,8 @@ async function completeDeskTask(state, team, revision) {
       const snapshot = await transaction.get(teamDocument);
       if (!snapshot.exists()) throw new Error("チームデータが見つかりません");
 
-      const task = normalizeDeskTask(snapshot.data());
+      const teamData = snapshot.data();
+      const task = normalizeDeskTask(teamData);
       if (task.status !== "pending" || task.revision !== revision) {
         throw new Error("依頼内容が更新されました。現在の表示を確認してください");
       }
@@ -1500,6 +1513,9 @@ async function completeDeskTask(state, team, revision) {
           deskTaskCompletedSteps: completedSteps,
           deskTaskCompletedAt: firestoreServerTimestamp(),
           deskTaskCompletedBy: clientId,
+          ...deskTaskCompletionStepUpdate(teamData, task),
+          updatedAt: firestoreServerTimestamp(),
+          updatedBy: clientId,
         },
         { merge: true },
       );
@@ -1610,6 +1626,8 @@ async function resetAllTeamProgress(state) {
           visitedStep32: false,
           deskTaskStatus: "idle",
           deskTaskStep: null,
+          deskTaskTargetStep: null,
+          deskTaskTargetVisitedStep32: null,
           deskTaskInstruction: "",
           deskTaskRevision: 0,
           deskTaskCompletedSteps: [],
@@ -1738,7 +1756,7 @@ function updateStaffView(state) {
             type="button"
             data-step-team="${team}"
             data-step-delta="-1"
-            ${!isOnline || isPending || step <= 1 ? "disabled" : ""}
+            ${!isOnline || isPending || isDeskTaskPending || step <= 1 ? "disabled" : ""}
           >${skippedStep32 && step === STEP_41_INDEX ? "3-1へ戻す" : "戻す"}</button>
         </div>
       `;
@@ -1959,6 +1977,7 @@ async function changeStep(state, team, delta, routeTarget = null) {
       const currentDeskTask = normalizeDeskTask(teamData);
       const deskTaskInstruction =
         delta > 0 ? getConfiguredDeskTaskInstruction(currentStep) : null;
+      const shouldWaitForDeskTask = Boolean(deskTaskInstruction);
       const isDeskTaskRollback =
         delta < 0 &&
         DESK_TASK_STEPS.includes(nextStep) &&
@@ -1970,6 +1989,8 @@ async function changeStep(state, team, delta, routeTarget = null) {
         ? {
             deskTaskStatus: "pending",
             deskTaskStep: currentStep,
+            deskTaskTargetStep: nextStep,
+            deskTaskTargetVisitedStep32: nextVisitedStep32,
             deskTaskInstruction,
             deskTaskRevision: currentDeskTask.revision + 1,
             deskTaskRequestedAt: firestoreServerTimestamp(),
@@ -1990,9 +2011,9 @@ async function changeStep(state, team, delta, routeTarget = null) {
         teamDocument,
         {
           teamNumber: team,
-          step: nextStep,
+          step: shouldWaitForDeskTask ? currentStep : nextStep,
           previousStep: currentStep,
-          visitedStep32: nextVisitedStep32,
+          visitedStep32: shouldWaitForDeskTask ? visitedStep32 : nextVisitedStep32,
           ...deskTaskUpdate,
           updatedAt: firestoreServerTimestamp(),
           updatedBy: clientId,
@@ -2020,7 +2041,8 @@ async function forceCompleteDeskTask(state, team) {
       const snapshot = await transaction.get(teamDocument);
       if (!snapshot.exists()) throw new Error("チームデータが見つかりません");
 
-      const task = normalizeDeskTask(snapshot.data());
+      const teamData = snapshot.data();
+      const task = normalizeDeskTask(teamData);
       if (task.status !== "pending" || !task.step) {
         throw new Error("完了待ちの依頼がありません");
       }
@@ -2037,6 +2059,7 @@ async function forceCompleteDeskTask(state, team) {
           deskTaskCompletedBy: clientId,
           deskTaskForceCompletedAt: firestoreServerTimestamp(),
           deskTaskForceCompletedBy: clientId,
+          ...deskTaskCompletionStepUpdate(teamData, task),
           updatedAt: firestoreServerTimestamp(),
           updatedBy: clientId,
         },
@@ -2050,6 +2073,19 @@ async function forceCompleteDeskTask(state, team) {
     state.pendingTeams.delete(team);
     updateStaffView(state);
   }
+}
+
+function deskTaskCompletionStepUpdate(teamData, task) {
+  if (!task.targetStep) return {};
+
+  return {
+    step: task.targetStep,
+    previousStep: task.step ?? normalizeStep(teamData?.step),
+    visitedStep32:
+      typeof task.targetVisitedStep32 === "boolean"
+        ? task.targetVisitedStep32
+        : normalizeVisitedStep32(teamData),
+  };
 }
 
 function renderPlayer(team) {
@@ -2721,6 +2757,7 @@ function normalizeDeskTask(teamData = {}) {
       ? teamData.deskTaskStatus
       : "idle";
   const step = Number(teamData?.deskTaskStep);
+  const targetStep = Number(teamData?.deskTaskTargetStep);
   const revision = Number(teamData?.deskTaskRevision);
   const completedSteps = Array.isArray(teamData?.deskTaskCompletedSteps)
     ? teamData.deskTaskCompletedSteps
@@ -2735,6 +2772,10 @@ function normalizeDeskTask(teamData = {}) {
   const normalizedTaskStep =
     Number.isInteger(step) && step >= 1 && step <= STEP_COUNT
       ? step
+      : null;
+  const normalizedTargetStep =
+    Number.isInteger(targetStep) && targetStep >= 1 && targetStep <= STEP_COUNT
+      ? targetStep
       : null;
   const instruction =
     typeof teamData?.deskTaskInstruction === "string"
@@ -2756,6 +2797,11 @@ function normalizeDeskTask(teamData = {}) {
         : 0,
     instruction,
     completedSteps,
+    targetStep: normalizedTargetStep,
+    targetVisitedStep32:
+      typeof teamData?.deskTaskTargetVisitedStep32 === "boolean"
+        ? teamData.deskTaskTargetVisitedStep32
+        : null,
   };
 }
 
