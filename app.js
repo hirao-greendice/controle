@@ -1692,13 +1692,11 @@ function updateStaffView(state) {
             <div class="staff-step-progress" aria-label="TEAM ${formatNumber(team)} STEP progress">
               ${stepProgressMarkup}
             </div>
-            <span class="step-note ${skippedStep32 ? "is-skip-route" : ""}">
+            <span class="step-note">
               <span class="step-note-text">
                 ${
                   isOnline
-                    ? skippedStep32
-                      ? `3-2スキップ / ${getStepNote(displayStep) || "—"}`
-                      : getStepNote(displayStep) || "—"
+                    ? getStepNote(displayStep) || "—"
                     : "—"
                 }
               </span>

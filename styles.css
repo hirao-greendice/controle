@@ -508,7 +508,8 @@ button {
   font-size: 22px;
 }
 
-.is-split-staff .staff-step-check.is-complete .staff-step-mark::after {
+.is-split-staff .staff-step-check.is-complete .staff-step-mark::after,
+.is-split-staff .staff-step-check.is-skipped .staff-step-mark::after {
   left: 7px;
   top: 2px;
   width: 9px;
@@ -713,7 +714,8 @@ button {
   box-shadow: 0 0 18px rgba(143, 208, 24, 0.26);
 }
 
-.staff-step-check.is-complete .staff-step-mark::after {
+.staff-step-check.is-complete .staff-step-mark::after,
+.staff-step-check.is-skipped .staff-step-mark::after {
   position: absolute;
   left: 5px;
   top: 1px;
@@ -726,15 +728,10 @@ button {
 }
 
 .staff-step-check.is-skipped {
-  color: #7a8090;
-  background:
-    repeating-linear-gradient(
-      -45deg,
-      rgba(255, 255, 255, 0.06) 0 6px,
-      transparent 6px 12px
-    ),
-    #171b20;
-  border-color: #343b43;
+  color: #2b0818;
+  background: #ff8abb;
+  border-color: #ffd3e7;
+  box-shadow: 0 0 18px rgba(255, 138, 187, 0.28);
 }
 
 .staff-step-check.is-offline {
@@ -775,12 +772,6 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.step-note.is-skip-route {
-  color: #ffe1a0;
-  background: rgba(118, 62, 5, 0.48);
-  border-left-color: rgba(255, 196, 82, 0.58);
 }
 
 .step-button {
