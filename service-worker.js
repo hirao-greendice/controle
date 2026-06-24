@@ -2,6 +2,7 @@ importScripts("./asset-cache-config.js");
 
 const config = globalThis.CONTROL_ASSET_CACHE;
 const cacheName = `${config.cachePrefix}${config.version}`;
+const assetCacheUrlParam = "v";
 const allAssets = [...config.coreAssets, ...config.mediaAssets];
 const assetUrls = new Set(
   allAssets.map((asset) => new URL(asset, self.registration.scope).href),
@@ -17,7 +18,7 @@ self.addEventListener("install", (event) => {
       await Promise.all(
         config.coreAssets.map(async (asset) => {
           const request = new Request(
-            new URL(asset, self.registration.scope).href,
+            versionedAssetUrl(asset),
             { cache: "reload" },
           );
           const response = await fetch(request);
@@ -78,11 +79,12 @@ self.addEventListener("fetch", (event) => {
 
 async function rangeResponse(request) {
   const cache = await caches.open(cacheName);
+  const shouldReload = request.cache === "reload";
   const fullRequest = new Request(request.url, {
-    cache: "default",
+    cache: shouldReload ? "reload" : "default",
     credentials: "same-origin",
   });
-  let response = await cache.match(fullRequest);
+  let response = shouldReload ? null : await cache.match(fullRequest);
 
   if (!response) {
     response = await fetch(fullRequest);
@@ -145,8 +147,10 @@ async function rangeResponse(request) {
 
 async function cacheFirst(request) {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
-  if (cached) return cached;
+  if (request.cache !== "reload") {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+  }
 
   const response = await fetch(request);
   if (response.ok) await cache.put(request, response.clone());
@@ -155,18 +159,28 @@ async function cacheFirst(request) {
 
 async function networkFirst(request, fallbackAsset = null) {
   const cache = await caches.open(cacheName);
+  const shouldReload = request.cache === "reload";
 
   try {
     const response = await fetch(request);
     if (response.ok) await cache.put(request, response.clone());
     return response;
   } catch (error) {
+    if (shouldReload) throw error;
+
     const cached =
       (await cache.match(request)) ||
       (fallbackAsset
-        ? await cache.match(new URL(fallbackAsset, self.registration.scope).href)
+        ? (await cache.match(versionedAssetUrl(fallbackAsset))) ||
+          (await cache.match(new URL(fallbackAsset, self.registration.scope).href))
         : null);
     if (cached) return cached;
     throw error;
   }
+}
+
+function versionedAssetUrl(asset) {
+  const url = new URL(asset, self.registration.scope);
+  if (config?.version) url.searchParams.set(assetCacheUrlParam, config.version);
+  return url.href;
 }

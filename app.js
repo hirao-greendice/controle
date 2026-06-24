@@ -81,12 +81,12 @@ const DESK_TASK_NAMES = Object.freeze({
 const CAMERA_COUNT = 9;
 const CAMERA_FRAME_STEPS = Object.freeze({
   1: STEP_LABELS,
-  2: ["1-1", "5-1"],
+  2: ["1-1", "3-1", "5-1", "6-1"],
   3: ["1-1", "5-1", "6-1"],
-  4: ["2-1", "3-1"],
-  5: ["3-1", "5-1"],
-  6: ["3-1", "5-1"],
-  7: ["4-1", "5-1"],
+  4: ["2-1", "3-1", "6-1"],
+  5: ["3-1", "5-1", "6-1"],
+  6: ["3-1", "5-1", "6-1"],
+  7: ["4-1", "5-1", "6-1"],
   8: ["5-1", "6-1"],
   9: ["5-1", "6-1"],
 });
@@ -157,6 +157,7 @@ const ASSET_CACHE_NAME = ASSET_CACHE_CONFIG
   ? `${ASSET_CACHE_CONFIG.cachePrefix}${ASSET_CACHE_CONFIG.version}`
   : null;
 const ASSET_CACHE_VERSION_KEY = "control-asset-cache-version";
+const ASSET_CACHE_URL_PARAM = "v";
 const ASSET_PRELOAD_CONCURRENCY = 6;
 const APPLICATION_VERSION_CHECK_INTERVAL_MS = 15000;
 
@@ -468,7 +469,7 @@ function startApplicationVersionWatcher() {
 }
 
 async function cacheAndWarmAsset(asset, cache, forceReload) {
-  const url = new URL(asset, window.location.href);
+  const url = versionedAssetUrl(asset);
   const request = new Request(url, {
     cache: forceReload ? "reload" : "default",
     credentials: "same-origin",
@@ -484,10 +485,18 @@ async function cacheAndWarmAsset(asset, cache, forceReload) {
   }
 
   if (isImageAsset(asset)) {
-    await decodeImageAsset(url.href);
+    await decodeImageAsset(url);
   } else if (isAudioAsset(asset)) {
-    await preloadAudioAsset(url.href);
+    await preloadAudioAsset(url);
   }
+}
+
+function versionedAssetUrl(asset) {
+  const url = new URL(asset, window.location.href);
+  if (ASSET_CACHE_CONFIG?.version) {
+    url.searchParams.set(ASSET_CACHE_URL_PARAM, ASSET_CACHE_CONFIG.version);
+  }
+  return url.href;
 }
 
 function isImageAsset(asset) {
@@ -798,8 +807,8 @@ function renderStaff(staffGroup = "first") {
           鈴音声
           <small>SUZU</small>
         </button>
-        <audio data-staff-audio-source="clear" src="./clear.mp3" preload="auto" playsinline></audio>
-        <audio data-staff-audio-source="suzu" src="./suzu.mp3" preload="auto" playsinline></audio>
+        <audio data-staff-audio-source="clear" src="${versionedAssetUrl("./clear.mp3")}" preload="auto" playsinline></audio>
+        <audio data-staff-audio-source="suzu" src="${versionedAssetUrl("./suzu.mp3")}" preload="auto" playsinline></audio>
       </div>
     </section>
   `;
@@ -1814,17 +1823,19 @@ function renderPlayer(team) {
   const cameraLayers = Array.from({ length: CAMERA_COUNT }, (_, index) => {
     const buttonNumber = index + 1;
     const assetNumber = formatNumber(buttonNumber);
+    const lockedAsset = versionedAssetUrl(`./Camera_Button_${assetNumber}-B.png`);
+    const activeAsset = versionedAssetUrl(`./Camera_Button_${assetNumber}-A.png`);
 
     return `
       <img
         class="player-camera-layer player-camera-layer-locked"
-        src="./Camera_Button_${assetNumber}-B.png"
+        src="${lockedAsset}"
         alt=""
         data-camera-locked-layer="${buttonNumber}"
       />
       <img
         class="player-camera-layer player-camera-layer-active"
-        src="./Camera_Button_${assetNumber}-A.png"
+        src="${activeAsset}"
         alt=""
         data-camera-active-layer="${buttonNumber}"
       />
@@ -1846,12 +1857,12 @@ function renderPlayer(team) {
 
   stage.innerHTML = `
     <section class="screen player-screen">
-      <img class="player-base-layer player-base-layer-01" src="./Base_01.png" alt="" />
+      <img class="player-base-layer player-base-layer-01" src="${versionedAssetUrl("./Base_01.png")}" alt="" />
       <div class="player-camera-feed" aria-hidden="true">
         <img class="player-camera-feed-layer" data-camera-feed-base alt="" />
         <img class="player-camera-feed-layer" data-camera-feed-frame alt="" />
       </div>
-      <img class="player-base-layer player-base-layer-02" src="./Base_02.png" alt="" />
+      <img class="player-base-layer player-base-layer-02" src="${versionedAssetUrl("./Base_02.png")}" alt="" />
       <img class="player-step-layer" data-player-step-layer alt="" />
       <div class="player-log-viewport" data-player-log-viewport aria-label="ロボットの行動ログ">
         <div class="player-log-list" data-player-log-list></div>
@@ -1873,7 +1884,7 @@ function renderPlayer(team) {
       ></button>
       <img
         class="player-game-end-overlay"
-        src="./hutae.png"
+        src="${versionedAssetUrl("./hutae.png")}"
         alt="ゲーム終了"
         data-game-end-overlay
         hidden
@@ -1885,7 +1896,7 @@ function renderPlayer(team) {
         aria-label="スタッフメニュー"
       ></button>
       <div class="player-map-popup" id="player-map-popup" role="dialog" aria-modal="true" aria-label="MAP" hidden>
-        <img class="player-map-layer player-map-window" src="./Map_Window.png" alt="" />
+        <img class="player-map-layer player-map-window" src="${versionedAssetUrl("./Map_Window.png")}" alt="" />
         <img class="player-map-layer player-map-base" data-map-base alt="" />
         <div class="player-map-camera-layers" data-map-camera-layers aria-hidden="true"></div>
         <button class="player-map-room-button player-map-room-a" type="button" data-map-room="A" aria-label="ルームα"></button>
@@ -1894,10 +1905,10 @@ function renderPlayer(team) {
       </div>
       <div class="player-step-popup" id="player-step-popup" role="dialog" aria-modal="true" aria-label="STEPメッセージ" hidden>
         <img class="player-step-popup-layer player-step-popup-content" data-step-popup-content alt="" />
-        <img class="player-step-popup-layer player-step-popup-window" src="./Pop_window.png" alt="" />
+        <img class="player-step-popup-layer player-step-popup-window" src="${versionedAssetUrl("./Pop_window.png")}" alt="" />
         <button class="player-step-popup-close" type="button" data-step-popup-close aria-label="メッセージを閉じる"></button>
       </div>
-      <audio data-player-click-sound src="./click.mp3" preload="auto" playsinline></audio>
+      <audio data-player-click-sound src="${versionedAssetUrl("./click.mp3")}" preload="auto" playsinline></audio>
     </section>
   `;
 
@@ -2016,7 +2027,7 @@ function setupPlayerClickSound() {
   let clickSoundBuffer = null;
 
   if (audioContext) {
-    fetch("./click.mp3")
+    fetch(versionedAssetUrl("./click.mp3"), { credentials: "same-origin" })
       .then((response) => {
         if (!response.ok) throw new Error(`click.mp3: ${response.status}`);
         return response.arrayBuffer();
@@ -2232,18 +2243,18 @@ function setupPlayerCameraControls() {
 
     feedBase.classList.toggle("is-visible", hasFrame && selectedCamera === 1);
     if (hasFrame && selectedCamera === 1) {
-      feedBase.src = "./Cam_01_Base.png";
+      feedBase.src = versionedAssetUrl("./Cam_01_Base.png");
     }
 
     feedFrame.classList.toggle("is-visible", hasFrame);
     if (hasFrame) {
       feedFrame.src =
-        `./Cam_${formatNumber(selectedCamera)}_${frameStep}.png`;
+        versionedAssetUrl(`./Cam_${formatNumber(selectedCamera)}_${frameStep}.png`);
     }
   }
 
   function renderStepDisplay() {
-    stepLayer.src = `./Stage_${getStepLabel(currentStep)}.png`;
+    stepLayer.src = versionedAssetUrl(`./Stage_${getStepLabel(currentStep)}.png`);
   }
 
   function renderLogs() {
@@ -2264,7 +2275,7 @@ function setupPlayerCameraControls() {
         (logAsset, index) => `
           <img
             class="player-log-entry"
-            src="./${logAsset}"
+            src="${versionedAssetUrl(`./${logAsset}`)}"
             alt="行動ログ ${index + 1}"
           />
         `,
@@ -2277,7 +2288,7 @@ function setupPlayerCameraControls() {
   }
 
   function renderMap() {
-    mapBase.src = `./Map_base_${selectedMapRoom}.png`;
+    mapBase.src = versionedAssetUrl(`./Map_base_${selectedMapRoom}.png`);
 
     mapRoomButtons.forEach((button) => {
       button.setAttribute(
@@ -2290,7 +2301,7 @@ function setupPlayerCameraControls() {
       .filter(({ step }) => getStepIndex(step) <= currentStep)
       .map(
         ({ asset }) => `
-          <img class="player-map-layer player-map-camera-layer" src="./${asset}" alt="" />
+          <img class="player-map-layer player-map-camera-layer" src="${versionedAssetUrl(`./${asset}`)}" alt="" />
         `,
       )
       .join("");
@@ -2303,7 +2314,7 @@ function setupPlayerCameraControls() {
       return;
     }
 
-    stepPopupContent.src = `./${popupAsset}`;
+    stepPopupContent.src = versionedAssetUrl(`./${popupAsset}`);
     stepPopup.hidden = false;
   }
 
