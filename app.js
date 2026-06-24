@@ -1724,12 +1724,13 @@ function updateStaffView(state) {
               `
               : `
                 <button
-                  class="step-button ${isPending ? "loading" : ""}"
+                  class="step-button ${isPending ? "loading" : ""} ${isDeskTaskPending ? "is-force" : ""}"
                   type="button"
                   data-step-team="${team}"
                   data-step-delta="1"
-                  ${!isOnline || isPending || isDeskTaskPending || step >= STEP_COUNT ? "disabled" : ""}
-                >進める</button>
+                  ${isDeskTaskPending ? 'data-force-step="true"' : ""}
+                  ${!isOnline || isPending || step >= STEP_COUNT ? "disabled" : ""}
+                >${isDeskTaskPending ? "強制進行" : "進める"}</button>
               `
           }
           <button
@@ -1747,6 +1748,11 @@ function updateStaffView(state) {
     button.addEventListener("click", () => {
       const team = Number(button.dataset.stepTeam);
       const delta = Number(button.dataset.stepDelta);
+      if (button.dataset.forceStep === "true" && delta > 0) {
+        openForceStepConfirmation(state, team);
+        return;
+      }
+
       changeStep(state, team, delta);
     });
   });
@@ -1809,6 +1815,56 @@ function staffStepProgressMarkup(currentStep, visitedStep32, deskTask, isOnline)
       </span>
     `;
   }).join("");
+}
+
+function openForceStepConfirmation(state, team) {
+  stage.querySelector("#force-step-confirm")?.remove();
+
+  const confirmation = document.createElement("div");
+  confirmation.className = "master-confirm-backdrop";
+  confirmation.id = "force-step-confirm";
+  confirmation.dataset.team = String(team);
+  confirmation.dataset.action = "ended";
+  confirmation.innerHTML = `
+    <section
+      class="master-confirm-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="force-step-confirm-title"
+      aria-describedby="force-step-confirm-message"
+    >
+      <p class="eyebrow">TEAM ${formatNumber(team)} / FORCE STEP</p>
+      <h2 id="force-step-confirm-title">強制的にSTEPを進めますか？</h2>
+      <p id="force-step-confirm-message">
+        巨人スタッフの完了を待たずに、現在の依頼を完了扱いにします。基本は使用しない操作です。
+      </p>
+      <div class="master-confirm-actions">
+        <button class="master-confirm-button is-yes" type="button" data-force-step-confirm="yes">
+          YES
+        </button>
+        <button class="master-confirm-button is-no" type="button" data-force-step-confirm="no">
+          NO
+        </button>
+      </div>
+    </section>
+  `;
+  stage.append(confirmation);
+
+  confirmation
+    .querySelector('[data-force-step-confirm="yes"]')
+    .addEventListener("click", () => {
+      confirmation.remove();
+      forceCompleteDeskTask(state, team);
+    });
+  confirmation
+    .querySelector('[data-force-step-confirm="no"]')
+    .addEventListener("click", () => {
+      confirmation.remove();
+    });
+  confirmation.addEventListener("click", (event) => {
+    if (event.target === confirmation) confirmation.remove();
+  });
+  confirmation.querySelector('[data-force-step-confirm="no"]').focus();
 }
 
 function openStep32SkipConfirmation(state, team) {
@@ -1946,6 +2002,50 @@ async function changeStep(state, team, delta, routeTarget = null) {
     });
   } catch (error) {
     showToast(`チーム${team}のSTEPを更新できません: ${error.message}`);
+  } finally {
+    state.pendingTeams.delete(team);
+    updateStaffView(state);
+  }
+}
+
+async function forceCompleteDeskTask(state, team) {
+  if (!state.activeTeams.includes(team) || state.pendingTeams.has(team)) return;
+
+  const teamDocument = doc(firestore, "teams", teamDocumentId(team));
+  state.pendingTeams.add(team);
+  updateStaffView(state);
+
+  try {
+    await runTransaction(firestore, async (transaction) => {
+      const snapshot = await transaction.get(teamDocument);
+      if (!snapshot.exists()) throw new Error("チームデータが見つかりません");
+
+      const task = normalizeDeskTask(snapshot.data());
+      if (task.status !== "pending" || !task.step) {
+        throw new Error("完了待ちの依頼がありません");
+      }
+
+      const completedSteps = [...new Set([...task.completedSteps, task.step])]
+        .sort((a, b) => a - b);
+
+      transaction.set(
+        teamDocument,
+        {
+          deskTaskStatus: "done",
+          deskTaskCompletedSteps: completedSteps,
+          deskTaskCompletedAt: firestoreServerTimestamp(),
+          deskTaskCompletedBy: clientId,
+          deskTaskForceCompletedAt: firestoreServerTimestamp(),
+          deskTaskForceCompletedBy: clientId,
+          updatedAt: firestoreServerTimestamp(),
+          updatedBy: clientId,
+        },
+        { merge: true },
+      );
+    });
+    showToast(`チーム${team}の依頼を強制完了しました`, "success");
+  } catch (error) {
+    showToast(`チーム${team}を強制進行できません: ${error.message}`);
   } finally {
     state.pendingTeams.delete(team);
     updateStaffView(state);

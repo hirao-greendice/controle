@@ -800,6 +800,17 @@ button {
   cursor: not-allowed;
 }
 
+.step-button.is-force {
+  color: #fff7e8;
+  background: #8a541d;
+  border: 1px solid #e5a14f;
+}
+
+.step-button.is-force:hover:not(:disabled),
+.step-button.is-force:focus-visible:not(:disabled) {
+  background: #a76823;
+}
+
 .master-screen {
   padding: 48px 58px;
 }
