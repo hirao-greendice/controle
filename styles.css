@@ -1568,20 +1568,20 @@ button {
 .player-camera-button.is-new::before {
   position: absolute;
   top: 4px;
-  left: -15px;
-  min-width: 48px;
+  left: 4px;
+  min-width: 30px;
   padding: 4px 8px 3px;
   color: #fff;
   background: #c51d2d;
-  border: 1px solid #f15c68;
   border-radius: 4px;
   box-shadow: none;
   content: "NEW";
-  font-family: "Arial Narrow", sans-serif;
-  font-size: 18px;
-  font-weight: 900;
+  font-family: "DIN Condensed", "Bahnschrift", "Arial Narrow", sans-serif;
+  font-size: 16px;
+  font-stretch: condensed;
+  font-weight: 800;
   line-height: 1;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   pointer-events: none;
   text-align: center;
 }
