@@ -1483,9 +1483,8 @@ button {
 .player-log-scrollbar-thumb {
   width: 8px;
   min-height: 52px;
-  background: #ef3340;
+  background: #9c2730;
   border-radius: 999px;
-  box-shadow: 0 0 10px rgba(239, 51, 64, 0.34);
   transform: translateY(0);
   transition:
     height 100ms ease-out,
