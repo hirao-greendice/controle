@@ -2415,6 +2415,7 @@ function setupPlayerCameraControls() {
   const stepPopupClose = stage.querySelector("[data-step-popup-close]");
   let currentStep = 1;
   let selectedCamera = 1;
+  const viewedCameraNumbers = new Set(getUnlockedCameras(currentStep));
   let selectedMapRoom = "A";
   let visitedStep32 = false;
   let renderedLogState = null;
@@ -2454,6 +2455,7 @@ function setupPlayerCameraControls() {
       if (!isCameraUnlocked(cameraNumber, currentStep)) return;
 
       selectedCamera = cameraNumber;
+      viewedCameraNumbers.add(cameraNumber);
       render();
     });
   });
@@ -2503,9 +2505,11 @@ function setupPlayerCameraControls() {
       const cameraNumber = Number(button.dataset.cameraButton);
       const isUnlocked = isCameraUnlocked(cameraNumber, currentStep);
       const isActive = isUnlocked && cameraNumber === selectedCamera;
+      const isNew = isUnlocked && !isActive && !viewedCameraNumbers.has(cameraNumber);
 
       button.disabled = !isUnlocked;
       button.classList.toggle("is-active", isActive);
+      button.classList.toggle("is-new", isNew);
       button.setAttribute("aria-pressed", String(isActive));
       button.setAttribute(
         "aria-label",

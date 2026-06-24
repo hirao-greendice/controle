@@ -1546,6 +1546,7 @@ button {
 }
 
 .player-camera-button {
+  position: relative;
   min-width: 0;
   padding: 0;
   background: transparent;
@@ -1553,6 +1554,27 @@ button {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+.player-camera-button.is-new::before {
+  position: absolute;
+  top: 4px;
+  left: -15px;
+  min-width: 48px;
+  padding: 4px 8px 3px;
+  color: #fff;
+  background: #c51d2d;
+  border: 1px solid #f15c68;
+  border-radius: 4px;
+  box-shadow: none;
+  content: "NEW";
+  font-family: "Arial Narrow", sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  text-align: center;
 }
 
 .player-camera-button:disabled {
