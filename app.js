@@ -1756,7 +1756,7 @@ function updateStaffView(state) {
             type="button"
             data-step-team="${team}"
             data-step-delta="-1"
-            ${!isOnline || isPending || isDeskTaskPending || step <= 1 ? "disabled" : ""}
+            ${!isOnline || isPending || step <= 1 ? "disabled" : ""}
           >${skippedStep32 && step === STEP_41_INDEX ? "3-1へ戻す" : "戻す"}</button>
         </div>
       `;
@@ -1985,6 +1985,8 @@ async function changeStep(state, team, delta, routeTarget = null) {
           currentDeskTask.step === nextStep ||
           currentDeskTask.completedSteps.includes(nextStep)
         );
+      const isPendingDeskTaskCancel =
+        delta < 0 && currentDeskTask.status === "pending";
       const deskTaskUpdate = deskTaskInstruction
         ? {
             deskTaskStatus: "pending",
@@ -1996,6 +1998,20 @@ async function changeStep(state, team, delta, routeTarget = null) {
             deskTaskRequestedAt: firestoreServerTimestamp(),
             deskTaskRequestedBy: clientId,
           }
+        : isPendingDeskTaskCancel
+          ? {
+              deskTaskStatus: "idle",
+              deskTaskStep: null,
+              deskTaskTargetStep: null,
+              deskTaskTargetVisitedStep32: null,
+              deskTaskInstruction: "",
+              deskTaskRevision: currentDeskTask.revision + 1,
+              deskTaskCompletedSteps: currentDeskTask.completedSteps.filter(
+                (completedStep) => completedStep !== nextStep,
+              ),
+              deskTaskRequestedAt: null,
+              deskTaskRequestedBy: null,
+            }
         : isDeskTaskRollback
           ? {
               deskTaskStatus: "idle",
