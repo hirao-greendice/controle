@@ -1673,29 +1673,35 @@ function updateStaffView(state) {
       const step = state.steps.get(team) ?? 1;
       const visitedStep32 =
         state.visitedStep32ByTeam.get(team) ?? step >= STEP_32_INDEX;
-      const skippedStep32 = isStep32Skipped(step, visitedStep32);
       const deskTask = state.deskTasks.get(team) ?? normalizeDeskTask();
-      const isRouteChoice = isOnline && step === STEP_31_INDEX;
+      const isDeskTaskPending = deskTask.status === "pending";
+      const displayStep = getStaffDisplayStep(step, deskTask);
+      const skippedStep32 = isStep32Skipped(displayStep, visitedStep32);
+      const isRouteChoice = isOnline && !isDeskTaskPending && step === STEP_31_INDEX;
       const isPending = state.pendingTeams.has(team);
+      const stepProgressMarkup = staffStepProgressMarkup(
+        displayStep,
+        visitedStep32,
+        deskTask,
+        isOnline,
+      );
 
       return `
         <div class="team-control-row ${isOnline ? "is-online" : "is-offline"} ${isRouteChoice ? "has-route-choice" : ""} ${deskTask.status === "pending" ? "has-desk-task" : ""}">
           <div class="step-band ${isOnline ? "" : "is-disconnected"}">
-            <span class="step-team">TEAM ${formatNumber(team)}</span>
-            <span class="step-value">
-              ${isOnline ? `STEP ${getStepLabel(step)} / ${STEP_LABELS.at(-1)}` : "接続無し"}
-            </span>
+            <div class="staff-step-progress" aria-label="TEAM ${formatNumber(team)} STEP progress">
+              ${stepProgressMarkup}
+            </div>
             <span class="step-note ${skippedStep32 ? "is-skip-route" : ""}">
               <span class="step-note-text">
                 ${
                   isOnline
                     ? skippedStep32
-                      ? `3-2スキップ / ${getStepNote(step) || "—"}`
-                      : getStepNote(step) || "—"
+                      ? `3-2スキップ / ${getStepNote(displayStep) || "—"}`
+                      : getStepNote(displayStep) || "—"
                     : "—"
                 }
               </span>
-              ${deskTaskStatusMarkup(deskTask)}
             </span>
           </div>
           ${
@@ -1724,7 +1730,7 @@ function updateStaffView(state) {
                   type="button"
                   data-step-team="${team}"
                   data-step-delta="1"
-                  ${!isOnline || isPending || step >= STEP_COUNT ? "disabled" : ""}
+                  ${!isOnline || isPending || isDeskTaskPending || step >= STEP_COUNT ? "disabled" : ""}
                 >進める</button>
               `
           }
@@ -1759,6 +1765,52 @@ function updateStaffView(state) {
       }
     });
   });
+}
+
+function getStaffDisplayStep(step, deskTask) {
+  if (deskTask?.status === "pending" && deskTask.step) {
+    return normalizeStep(deskTask.step);
+  }
+
+  return normalizeStep(step);
+}
+
+function staffStepProgressMarkup(currentStep, visitedStep32, deskTask, isOnline) {
+  const normalizedStep = normalizeStep(currentStep);
+  const task = deskTask ?? normalizeDeskTask();
+  const pendingTaskStep = task.status === "pending" ? task.step : null;
+  const skippedStep32 = isStep32Skipped(normalizedStep, visitedStep32);
+
+  return STEP_LABELS.map((stepLabel, index) => {
+    const stepNumber = index + 1;
+    const isSkipped = skippedStep32 && stepNumber === STEP_32_INDEX;
+    let statusClass = "is-upcoming";
+    let statusLabel = "upcoming";
+
+    if (!isOnline) {
+      statusClass = "is-offline";
+      statusLabel = "offline";
+    } else if (isSkipped) {
+      statusClass = "is-skipped";
+      statusLabel = "skipped";
+    } else if (pendingTaskStep === stepNumber) {
+      statusClass = "is-waiting";
+      statusLabel = "waiting for giant staff";
+    } else if (stepNumber === normalizedStep) {
+      statusClass = "is-current";
+      statusLabel = "current challenge";
+    } else if (stepNumber < normalizedStep) {
+      statusClass = "is-complete";
+      statusLabel = "complete";
+    }
+
+    return `
+      <span class="staff-step-check ${statusClass}" aria-label="STEP ${stepLabel}: ${statusLabel}">
+        <span class="staff-step-mark" aria-hidden="true"></span>
+        <span class="staff-step-label">${stepLabel}</span>
+      </span>
+    `;
+  }).join("");
 }
 
 function openStep32SkipConfirmation(state, team) {
@@ -2619,18 +2671,6 @@ function getConfiguredDeskTaskInstruction(step) {
 
 function getDeskTaskName(step) {
   return DESK_TASK_NAMES[getStepLabel(step)] ?? "机作業";
-}
-
-function deskTaskStatusMarkup(task) {
-  if (task.status === "pending") {
-    return `<span class="desk-task-badge is-pending">机作業 実行中</span>`;
-  }
-
-  if (task.status === "done") {
-    return `<span class="desk-task-badge is-done">机作業 完了</span>`;
-  }
-
-  return "";
 }
 
 function isStep32Skipped(step, visitedStep32) {
