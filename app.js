@@ -44,6 +44,7 @@ const STEP_LABELS = Object.freeze([
   "3-2",
   "4-1",
   "4-2",
+  "4-3",
   "5-1",
   "6-1",
 ]);
@@ -51,6 +52,9 @@ const STEP_COUNT = STEP_LABELS.length;
 const STEP_31_INDEX = STEP_LABELS.indexOf("3-1") + 1;
 const STEP_32_INDEX = STEP_LABELS.indexOf("3-2") + 1;
 const STEP_41_INDEX = STEP_LABELS.indexOf("4-1") + 1;
+const STEP_STAGE_LABELS = Object.freeze({
+  "4-3": "4-2",
+});
 const STEP_NOTES = Object.freeze({
   "1-1": "懐中時計",
   "2-1": "フラミンゴ",
@@ -59,6 +63,7 @@ const STEP_NOTES = Object.freeze({
   "3-2": "ボタン開＆マンタ",
   "4-1": "マイナスドライバー",
   "4-2": "マドラー",
+  "4-3": "マドラー",
   "5-1": "鉛筆＆ラッパ",
   "6-1": "ゲームクリア",
 });
@@ -70,10 +75,15 @@ const DESK_TASKS = Object.freeze({
   "2-2": "チーム番号札取り除け",
   "4-2": "イス倒せ",
 });
+const DESK_TASK_TRIGGER_LABELS = Object.freeze(["1-1", "2-1", "2-2", "4-3"]);
+const DESK_TASK_SOURCE_LABELS = Object.freeze({
+  "4-3": "4-2",
+});
 const DESK_TASK_STEPS = Object.freeze(
-  Object.keys(DESK_TASKS).map((stepLabel) => STEP_LABELS.indexOf(stepLabel) + 1),
+  DESK_TASK_TRIGGER_LABELS.map((stepLabel) => STEP_LABELS.indexOf(stepLabel) + 1),
 );
 const DESK_TASK_NAMES = Object.freeze({
+  "4-3": "イス",
   "1-1": "消しゴム",
   "2-1": "番号札を切る",
   "2-2": "番号札を外す",
@@ -81,15 +91,15 @@ const DESK_TASK_NAMES = Object.freeze({
 });
 const CAMERA_COUNT = 9;
 const CAMERA_FRAME_STEPS = Object.freeze({
-  1: STEP_LABELS,
-  2: ["1-1", "3-1", "5-1", "6-1"],
-  3: ["1-1", "5-1", "6-1"],
-  4: ["2-1", "3-1", "5-1", "6-1"],
-  5: ["3-1", "5-1", "6-1"],
-  6: ["3-1", "5-1", "6-1"],
-  7: ["4-1", "5-1", "6-1"],
-  8: ["5-1", "6-1"],
-  9: ["5-1", "6-1"],
+  1: ["1-1", "2-1", "2-2", "3-1", "3-2", "4-1", "4-2", "4-3", "6-1"],
+  2: ["1-1", "3-1", "4-3", "6-1"],
+  3: ["1-1", "4-3", "6-1"],
+  4: ["2-1", "3-1", "4-3", "6-1"],
+  5: ["3-1", "4-3", "6-1"],
+  6: ["3-1", "4-3", "6-1"],
+  7: ["4-1", "4-3", "6-1"],
+  8: ["4-3", "6-1"],
+  9: ["4-3", "6-1"],
 });
 const CAMERA_UNLOCK_STEP_LABELS = Object.freeze({
   1: "1-1",
@@ -2539,7 +2549,7 @@ function setupPlayerCameraControls() {
   }
 
   function renderStepDisplay() {
-    stepLayer.src = versionedAssetUrl(`./Stage_${getStepLabel(currentStep)}.png`);
+    stepLayer.src = versionedAssetUrl(`./Stage_${getStageStepLabel(currentStep)}.png`);
   }
 
   function renderLogs() {
@@ -2823,7 +2833,10 @@ function normalizeDeskTask(teamData = {}) {
 
 function getConfiguredDeskTaskInstruction(step) {
   const label = getStepLabel(step);
-  const instruction = DESK_TASKS[label];
+  if (!DESK_TASK_TRIGGER_LABELS.includes(label)) return null;
+
+  const sourceLabel = DESK_TASK_SOURCE_LABELS[label] ?? label;
+  const instruction = DESK_TASKS[sourceLabel];
   return typeof instruction === "string" && instruction.trim()
     ? instruction.trim()
     : null;
@@ -2896,6 +2909,11 @@ function getStepLabel(step) {
   return STEP_LABELS[normalizeStep(step) - 1];
 }
 
+function getStageStepLabel(step) {
+  const label = typeof step === "string" ? step : getStepLabel(step);
+  return STEP_STAGE_LABELS[label] ?? label;
+}
+
 function getStepNote(step) {
   return STEP_NOTES[getStepLabel(step)] ?? "";
 }
@@ -2904,9 +2922,11 @@ function getCameraFrameStep(cameraNumber, step) {
   const frameSteps = CAMERA_FRAME_STEPS[cameraNumber] ?? [];
   const currentStep = normalizeStep(step);
 
-  return frameSteps
+  const frameStep = frameSteps
     .filter((frameStep) => STEP_LABELS.indexOf(frameStep) + 1 <= currentStep)
     .at(-1);
+
+  return frameStep;
 }
 
 function getCameraUnlockStep(cameraNumber) {

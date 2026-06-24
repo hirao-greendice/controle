@@ -654,7 +654,7 @@ button {
 
 .staff-step-progress {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 7px;
   min-width: 0;
   padding: 0 14px;
