@@ -2560,25 +2560,37 @@ function setupPlayerCameraControls() {
     const logState = `${currentStep}:${visitedStep32}`;
     if (renderedLogState === logState) return;
 
-    const visibleLogs = STEP_LABELS.slice(0, currentStep)
+    const visibleLogGroups = STEP_LABELS.slice(0, currentStep)
       .filter(
         (stepLabel) =>
           stepLabel !== "3-2" ||
           currentStep === STEP_32_INDEX ||
           visitedStep32,
       )
-      .flatMap((stepLabel) => STEP_LOGS[stepLabel] ?? []);
+      .map((stepLabel) => STEP_LOGS[stepLabel] ?? [])
+      .filter((logs) => logs.length > 0);
 
-    logList.innerHTML = visibleLogs
-      .map(
-        (logAsset, index) => `
-          <img
-            class="player-log-entry"
-            src="${versionedAssetUrl(`./${logAsset}`)}"
-            alt="行動ログ ${index + 1}"
-          />
-        `,
-      )
+    let logIndex = 0;
+    logList.innerHTML = visibleLogGroups
+      .map((logs, groupIndex) => {
+        const entries = logs
+          .map((logAsset) => {
+            logIndex += 1;
+            return `
+              <img
+                class="player-log-entry"
+                src="${versionedAssetUrl(`./${logAsset}`)}"
+                alt="LOG ${logIndex}"
+              />
+            `;
+          })
+          .join("");
+
+        return `
+          ${groupIndex > 0 ? '<div class="player-log-separator" aria-hidden="true"></div>' : ""}
+          ${entries}
+        `;
+      })
       .join("");
 
     renderedLogState = logState;
