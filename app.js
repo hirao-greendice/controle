@@ -2305,6 +2305,12 @@ function renderPlayer(team) {
         type="button"
         aria-label="スタッフメニュー"
       ></button>
+      <button
+        class="player-fullscreen-button"
+        type="button"
+        data-player-fullscreen
+        aria-label="Fullscreen"
+      ></button>
       <div class="player-map-popup" id="player-map-popup" role="dialog" aria-modal="true" aria-label="MAP" hidden>
         <img class="player-map-layer player-map-window" src="${versionedAssetUrl("./Map_Window.png")}" alt="" />
         <img class="player-map-layer player-map-base" data-map-base alt="" />
@@ -2324,6 +2330,7 @@ function renderPlayer(team) {
 
   const teamDocument = doc(firestore, "teams", teamDocumentId(team));
   setupPlayerClickSound();
+  setupPlayerFullscreenButton();
   const cameraControls = setupPlayerCameraControls();
   const savedManualProgress = readLocalPlayerProgress(team);
   let manualStepOverride = savedManualProgress?.step ?? null;
@@ -2505,6 +2512,34 @@ function setupPlayerClickSound() {
       sound.load();
     });
     audioContext?.close().catch(() => {});
+  });
+}
+
+function setupPlayerFullscreenButton() {
+  const button = stage.querySelector("[data-player-fullscreen]");
+  if (!button) return;
+
+  const isFullscreenSupported = Boolean(
+    document.documentElement.requestFullscreen ??
+      document.documentElement.webkitRequestFullscreen,
+  );
+  const updateVisibility = () => {
+    button.hidden = !isFullscreenSupported || Boolean(getFullscreenElement());
+  };
+  const handleClick = () => {
+    enterFullscreen();
+    window.setTimeout(updateVisibility, 300);
+  };
+
+  button.addEventListener("click", handleClick);
+  document.addEventListener("fullscreenchange", updateVisibility);
+  document.addEventListener("webkitfullscreenchange", updateVisibility);
+  updateVisibility();
+
+  viewCleanups.push(() => {
+    button.removeEventListener("click", handleClick);
+    document.removeEventListener("fullscreenchange", updateVisibility);
+    document.removeEventListener("webkitfullscreenchange", updateVisibility);
   });
 }
 

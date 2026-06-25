@@ -1623,6 +1623,45 @@ button {
   outline: none;
 }
 
+.player-fullscreen-button {
+  position: absolute;
+  right: 34px;
+  bottom: 34px;
+  z-index: 130;
+  width: 86px;
+  height: 86px;
+  padding: 0;
+  background:
+    linear-gradient(#fff, #fff) 20px 20px / 22px 5px no-repeat,
+    linear-gradient(#fff, #fff) 20px 20px / 5px 22px no-repeat,
+    linear-gradient(#fff, #fff) 44px 20px / 22px 5px no-repeat,
+    linear-gradient(#fff, #fff) 61px 20px / 5px 22px no-repeat,
+    linear-gradient(#fff, #fff) 20px 44px / 5px 22px no-repeat,
+    linear-gradient(#fff, #fff) 20px 61px / 22px 5px no-repeat,
+    linear-gradient(#fff, #fff) 61px 44px / 5px 22px no-repeat,
+    linear-gradient(#fff, #fff) 44px 61px / 22px 5px no-repeat,
+    rgba(0, 0, 0, 0.72);
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.player-fullscreen-button[hidden] {
+  display: none;
+}
+
+.player-fullscreen-button:focus-visible {
+  outline: 4px solid #fff;
+  outline-offset: 4px;
+}
+
+.player-fullscreen-button:active {
+  transform: scale(0.96);
+}
+
 .player-map-trigger {
   position: absolute;
   top: 34px;
