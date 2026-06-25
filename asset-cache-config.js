@@ -1,7 +1,7 @@
 // 素材を更新した時は、この値だけを変更してください。
 // バージョンが変わると全素材を新しいキャッシュへ再取得します。
 globalThis.CONTROL_ASSET_CACHE = Object.freeze({
-  version: "2026.06.24.40",
+  version: "2026.06.25.1",
   cachePrefix: "control-assets-",
   coreAssets: Object.freeze([
     "./",
@@ -29,7 +29,6 @@ globalThis.CONTROL_ASSET_CACHE = Object.freeze({
     "./Cam_02_6-1.png",
     "./Cam_03_1-1.png",
     "./Cam_03_4-3.png",
-    "./Cam_03_5-2.png",
     "./Cam_03_6-1.png",
     "./Cam_04_2-1.png",
     "./Cam_04_3-1.png",

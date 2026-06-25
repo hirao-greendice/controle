@@ -177,7 +177,9 @@ const ASSET_CACHE_NAME = ASSET_CACHE_CONFIG
   : null;
 const ASSET_CACHE_VERSION_KEY = "control-asset-cache-version";
 const ASSET_CACHE_URL_PARAM = "v";
-const ASSET_PRELOAD_CONCURRENCY = 6;
+const ASSET_PRELOAD_CONCURRENCY = 3;
+const ASSET_PRELOAD_RETRY_COUNT = 2;
+const ASSET_PRELOAD_RETRY_DELAY_MS = 600;
 const APPLICATION_VERSION_CHECK_INTERVAL_MS = 15000;
 
 const app = initializeApp(firebaseConfig);
@@ -496,7 +498,7 @@ async function cacheAndWarmAsset(asset, cache, forceReload) {
   let response = cache && !forceReload ? await cache.match(request) : null;
 
   if (!response) {
-    response = await fetch(request);
+    response = await fetchAssetWithRetry(request, asset);
     if (!response.ok) {
       throw new Error(`${assetFileName(asset)} (${response.status})`);
     }
@@ -508,6 +510,32 @@ async function cacheAndWarmAsset(asset, cache, forceReload) {
   } else if (isAudioAsset(asset)) {
     await preloadAudioAsset(url);
   }
+}
+
+async function fetchAssetWithRetry(request, asset) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= ASSET_PRELOAD_RETRY_COUNT; attempt += 1) {
+    try {
+      const response = await fetch(request.clone());
+      if (response.ok || response.status === 404) return response;
+      lastError = new Error(`${assetFileName(asset)} (${response.status})`);
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt < ASSET_PRELOAD_RETRY_COUNT) {
+      await wait(ASSET_PRELOAD_RETRY_DELAY_MS * (attempt + 1));
+    }
+  }
+
+  throw lastError ?? new Error(`${assetFileName(asset)}の取得に失敗しました`);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function versionedAssetUrl(asset) {
@@ -2627,10 +2655,8 @@ function setupPlayerCameraControls() {
     const frameStep = getCameraFrameStep(selectedCamera, currentStep);
     const hasFrame = Boolean(frameStep);
 
-    feedBase.classList.toggle("is-visible", hasFrame && selectedCamera === 1);
-    if (hasFrame && selectedCamera === 1) {
-      feedBase.src = versionedAssetUrl("./Cam_01_Base.png");
-    }
+    feedBase.classList.remove("is-visible");
+    feedBase.removeAttribute("src");
 
     feedFrame.classList.toggle("is-visible", hasFrame);
     if (hasFrame) {
